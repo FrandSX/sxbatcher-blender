@@ -22,10 +22,11 @@ export_path = os.path.abspath(args.exportpath) + os.path.sep
 #    The below steps are designed for use with SX Tools Blender addon.
 #	 Edit according to the needs of your project.
 # ------------------------------------------------------------------------
+bpy.ops.preferences.addon_enable(module="sxtools")
+bpy.context.preferences.addons['sxtools'].preferences.libraryfolder = '/Users/bob/sxtools-blender/' # <- Your sxtools folder here!
+# bpy.ops.sxtools.loadlibraries('EXEC_DEFAULT')
 
 bpy.data.scenes["Scene"].sxtools.exportfolder = export_path
-
-bpy.ops.sxtools.loadlibraries('EXEC_DEFAULT')
 
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.sxtools.macro('EXEC_DEFAULT')

@@ -63,9 +63,9 @@ def sx_process(sourcefile):
     export_path = os.path.abspath(args.exportpath)
 
     if export_path is None:
-        batch_args = [blender_path, "-b", "-noaudio", sourcefile, "-P", script_path, "--"]
+        batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", sourcefile, "-P", script_path, "--"]
     else:
-        batch_args = [blender_path, "-b", "-noaudio", sourcefile, "-P", script_path, "--", "-x", export_path]
+        batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", sourcefile, "-P", script_path, "--", "-x", export_path]
 
     # Primary method: spawns quiet workers
     with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
@@ -91,22 +91,26 @@ if __name__ == '__main__':
     elif args.category is not None:
         if category in asset_dict.keys():
             for key in asset_dict[category].keys():
-                source_files.append(os.path.join(asset_path, key))
+                file_path = key.replace('//', os.path.sep)
+                source_files.append(os.path.join(asset_path, file_path))
     elif args.filename is not None:
         for category in asset_dict.keys():
             for key in asset_dict[category].keys():
                 if filename in key:
-                    source_files.append(os.path.join(asset_path, key))
+                    file_path = key.replace('//', os.path.sep)
+                    source_files.append(os.path.join(asset_path, file_path))
     elif args.tag is not None:
         for category in asset_dict.keys():
             for key, values in asset_dict[category].items():
                 for value in values:
                     if tag == value:
-                        source_files.append(os.path.join(asset_path, key))
+                        file_path = key.replace('//', os.path.sep)
+                        source_files.append(os.path.join(asset_path, file_path))
     else:
         for category in asset_dict.keys():
             for key in asset_dict[category].keys():
-                source_files.append(os.path.join(asset_path, key))
+                file_path = key.replace('//', os.path.sep)
+                source_files.append(os.path.join(asset_path, file_path))
 
     print('Source files: ')
     for file in source_files:

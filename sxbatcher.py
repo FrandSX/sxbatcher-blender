@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (0, 1, 0),
+    'version': (0, 1, 1),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -154,7 +154,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         else:
             asset_dict[asset_category] = {}
 
-        asset_dict[asset_category][file_rel_path] = asset_tags
+        asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = asset_tags
         self.save_asset_data(prefs.cataloguepath, asset_dict)
         return {'FINISHED'}
 

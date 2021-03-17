@@ -120,7 +120,7 @@ if __name__ == '__main__':
         num_cores = multiprocessing.cpu_count()
 
         then = time.time()
-        print('SX Batch: Spawning', num_cores, 'workers')
+        print('SX Batch: Spawning max', num_cores, 'workers')
 
         with Pool(processes=num_cores) as pool:
             pool.map(sx_process, source_files)

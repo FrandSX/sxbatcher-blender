@@ -61,7 +61,7 @@ def sx_process(sourcefile):
     args = get_args()
     script_path = str(os.path.realpath(__file__)).replace('sx_manager.py', 'sx_batch.py')
     export_path = os.path.abspath(args.exportpath)
-    print('export path:', export_path)
+
     if export_path is None:
         batch_args = [blender_path, "-b", "-noaudio", sourcefile, "-P", script_path, "--"]
     else:
@@ -71,7 +71,7 @@ def sx_process(sourcefile):
     with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
         subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
 
-    # Comment above and uncomment below for for debugging (also add -d to batch args)
+    # Comment above and uncomment below for for debugging (also add "-d" to batch args)
     # subprocess.run(batch_args)
 
 if __name__ == '__main__':

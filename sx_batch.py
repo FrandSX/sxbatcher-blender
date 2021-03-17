@@ -17,14 +17,19 @@ def get_args():
 
 args = get_args()
 export_path = os.path.abspath(args.exportpath) + os.path.sep
+
+# ------------------------------------------------------------------------
+#    The below steps are designed for use with SX Tools Blender addon.
+#	 Edit according to the needs of your project.
+# ------------------------------------------------------------------------
+
 bpy.data.scenes["Scene"].sxtools.exportfolder = export_path
 
 bpy.ops.sxtools.loadlibraries('EXEC_DEFAULT')
+
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.sxtools.macro('EXEC_DEFAULT')
 
-# export scene
 bpy.ops.sxtools.exportfiles('EXEC_DEFAULT')
 
-# exit
 bpy.ops.wm.quit_blender('EXEC_DEFAULT')

@@ -66,10 +66,13 @@ def sx_process(sourcefile):
         batch_args = [blender_path, "-b", "-noaudio", sourcefile, "-P", script_path, "--"]
     else:
         batch_args = [blender_path, "-b", "-noaudio", sourcefile, "-P", script_path, "--", "-x", export_path]
-    subprocess.run(batch_args)
-    # with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
-    #     subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
 
+    # Primary method: spawns quiet workers
+    with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
+        subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
+
+    # Comment above and uncomment below for for debugging (also add -d to batch args)
+    # subprocess.run(batch_args)
 
 if __name__ == '__main__':
     args = get_args()

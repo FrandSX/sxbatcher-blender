@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (0, 1, 1),
+    'version': (0, 1, 2),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -91,13 +91,13 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
                     input.close()
                 return True, temp_dict
             except ValueError:
-                message_box('Invalid Asset Catalogue file.', 'SX Batcher Error', 'ERROR')
+                message_box('Invalid Catalogue file.', 'SX Batcher Error', 'ERROR')
                 return False, None
             except IOError:
-                message_box('Asset Catalogue file not found!', 'SX Batcher Error', 'ERROR')
+                message_box('Catalogue file not found!', 'SX Batcher Error', 'ERROR')
                 return False, None
         else:
-            message_box('Invalid catalogue path', 'SX Batcher Error', 'ERROR')
+            message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
             return False, None
 
 
@@ -108,7 +108,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
                 output.close()
             message_box(catalogue_path + ' saved')
         else:
-            message_box(mode + ' file location not set!', 'SX Batcher Error', 'ERROR')
+            message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
 
 
     def invoke(self, context, event):
@@ -149,7 +149,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         if asset_category in asset_dict.keys():
             for key in asset_dict[asset_category].keys():
                 if os.path.samefile(file_path, os.path.join(asset_path, key)):
-                    message_box('File already in catalogue!', 'SX Batcher Error', 'ERROR')
+                    message_box('File already in Catalogue!', 'SX Batcher Error', 'ERROR')
                     return {'FINISHED'}
         else:
             asset_dict[asset_category] = {}
@@ -161,8 +161,8 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
 
 class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
     bl_idname = 'sxbatcher.catalogue_remove'
-    bl_label = 'Remove File from Asset Catalogue'
-    bl_description = 'Remove current file from the Asset Catalogue'
+    bl_label = 'Remove File from Catalogue'
+    bl_description = 'Remove current file from Catalogue'
 
 
     def load_asset_data(self, catalogue_path):
@@ -174,13 +174,13 @@ class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
                     input.close()
                 return True, temp_dict
             except ValueError:
-                message_box('Invalid Asset Catalogue file.', 'SX Batcher Error', 'ERROR')
+                message_box('Invalid Catalogue file.', 'SX Batcher Error', 'ERROR')
                 return False, None
             except IOError:
-                message_box('Asset Catalogue file not found!', 'SX Batcher Error', 'ERROR')
+                message_box('Catalogue file not found!', 'SX Batcher Error', 'ERROR')
                 return False, None
         else:
-            message_box('Invalid catalogue path', 'SX Batcher Error', 'ERROR')
+            message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
             return False, None
 
 
@@ -191,7 +191,7 @@ class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
                 output.close()
             message_box(catalogue_path + ' saved')
         else:
-            message_box(mode + ' file location not set!', 'SX Batcher Error', 'ERROR')
+            message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
 
 
     def invoke(self, context, event):

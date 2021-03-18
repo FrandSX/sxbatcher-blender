@@ -27,7 +27,7 @@ elif platform == 'Linux':
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--open', help='Open a Catalogue file')
-    parser.add_argument('-d', '--folder', help='Export all objects from folder (bypasses the Asset Library')
+    parser.add_argument('-d', '--folder', help='Export all objects from folder (bypasses the Catalogue')
     parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
     parser.add_argument('-f', '--filename', help='Export an object by filename')
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
@@ -44,13 +44,13 @@ def load_asset_data():
                 temp_dict = {}
                 temp_dict = json.load(input)
                 input.close()
-            print('SX Tools: Asset Registry loaded from ' + catalogue_path)
+            print('SX Tools: Catalogue loaded from ' + catalogue_path)
             return temp_dict
         except ValueError:
-            print('SX Tools Error: Invalid Asset Registry file.')
+            print('SX Tools Error: Invalid Catalogue file.')
             return False
         except IOError:
-            print('SX Tools Error: Asset Registry file not found!')
+            print('SX Tools Error: Catalogue file not found!')
             return False
     else:
         print('SX Tools: Invalid path')

@@ -11,20 +11,21 @@ def get_args():
 	script_args = all_arguments[double_dash_index + 1: ]
 
 	# add parser rules
-	parser.add_argument('-x', '--exportpath', help="Export Path")
+	parser.add_argument('-x', '--exportpath', help='Export Path')
+	parser.add_argument('-l', '--librarypath', help='SX Tools Library Path')
 	parsed_script_args, _ = parser.parse_known_args(script_args)
 	return parsed_script_args
 
 args = get_args()
 export_path = os.path.abspath(args.exportpath) + os.path.sep
+library_path = os.path.abspath(args.librarypath) + os.path.sep
 
 # ------------------------------------------------------------------------
 #    The below steps are designed for use with SX Tools Blender addon.
 #	 Edit according to the needs of your project.
 # ------------------------------------------------------------------------
 bpy.ops.preferences.addon_enable(module="sxtools")
-bpy.context.preferences.addons['sxtools'].preferences.libraryfolder = '/Users/bob/sxtools-blender/' # <- Your sxtools folder here!
-# bpy.ops.sxtools.loadlibraries('EXEC_DEFAULT')
+bpy.context.preferences.addons['sxtools'].preferences.libraryfolder = library_path
 
 bpy.data.scenes["Scene"].sxtools.exportfolder = export_path
 

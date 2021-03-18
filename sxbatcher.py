@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (0, 1, 2),
+    'version': (0, 1, 3),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -134,6 +134,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         asset_tags = self.assetTags.split(' ')
         file_path = bpy.data.filepath
 
+        # Check if the open scene has been saved to a file
         if len(file_path) == 0:
             message_box('Current file not saved!', 'SX Batcher Error', 'ERROR')
             return {'FINISHED'}
@@ -142,18 +143,24 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         prefix = os.path.commonpath([asset_path, file_path])
         file_rel_path = os.path.relpath(file_path, asset_path)
 
+        # Check if file is located under the specified folder
         if not os.path.samefile(asset_path, prefix):
             message_box('File not located under asset folders!', 'SX Batcher Error', 'ERROR')
             return {'FINISHED'}
 
-        if asset_category in asset_dict.keys():
-            for key in asset_dict[asset_category].keys():
-                if os.path.samefile(file_path, os.path.join(asset_path, key)):
+        # Check if file already in catalogue
+        for category in asset_dict.keys():
+            for key in asset_dict[category].keys():
+                key_path = key.replace('//', os.path.sep)
+                if os.path.samefile(file_path, os.path.join(asset_path, key_path)):
                     message_box('File already in Catalogue!', 'SX Batcher Error', 'ERROR')
                     return {'FINISHED'}
-        else:
+
+        # Check if the Catalogue already contains the asset category
+        if asset_category not in asset_dict.keys():
             asset_dict[asset_category] = {}
 
+        # Save entry with a platform-independent path separator
         asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = asset_tags
         self.save_asset_data(prefs.cataloguepath, asset_dict)
         return {'FINISHED'}
@@ -216,7 +223,7 @@ class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
             return {'FINISHED'}
 
         for asset_category in asset_dict.keys():
-            asset_dict[asset_category].pop(file_rel_path, None)
+            asset_dict[asset_category].pop(file_rel_path.replace(os.path.sep, '//'), None)
 
         self.save_asset_data(prefs.cataloguepath, asset_dict)
         return {'FINISHED'}

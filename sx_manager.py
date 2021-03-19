@@ -18,13 +18,13 @@ def get_args():
     sxtools_path = conf.get('sxtools_path')
 
     if blender_path is not None:
-        blender_path = blender_path if os.path.isfile(blender_path) else None
+        blender_path = blender_path.replace('//', os.path.sep) if os.path.isfile(blender_path.replace('//', os.path.sep)) else None
     if catalogue_path is not None:
-        catalogue_path = catalogue_path if os.path.isfile(catalogue_path) else None
+        catalogue_path = catalogue_path.replace('//', os.path.sep) if os.path.isfile(catalogue_path.replace('//', os.path.sep)) else None
     if export_path is not None:
-        export_path = export_path if os.path.isdir(export_path) else None
+        export_path = export_path.replace('//', os.path.sep) if os.path.isdir(export_path.replace('//', os.path.sep)) else None
     if sxtools_path is not None:
-        sxtools_path = sxtools_path if os.path.isdir(sxtools_path) else None
+        sxtools_path = sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxtools_path.replace('//', os.path.sep)) else None
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', '--blenderpath', default=blender_path, help='Blender executable location')
@@ -124,7 +124,6 @@ if __name__ == '__main__':
         sxtools_path = os.path.abspath(args.sxtools)
     else:
         print('SX Batcher Warning: SX Tools path not specified')
-
 
     source_files = []
     if args.blenderpath is None:

@@ -30,6 +30,7 @@ def get_args():
     parser.add_argument('-b', '--blenderpath', default=blender_path, help='Blender executable location')
     parser.add_argument('-o', '--open', default=catalogue_path, help='Open a Catalogue file')
     parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
+    parser.add_argument('-r', '--remotetask', nargs='+', type=str, help='Process distributed task list')
     parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
     parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
     parser.add_argument('-f', '--filename', help='Export an object by filename')
@@ -108,6 +109,7 @@ if __name__ == '__main__':
 
     script_path = str(os.path.realpath(__file__)).replace('sx_manager.py', 'sx_batch.py')
     blender_path = str(args.blenderpath)
+    task_list = args.remotetask
     folder = str(args.folder)
     category = str(args.category)
     filename = str(args.filename)
@@ -128,12 +130,14 @@ if __name__ == '__main__':
     source_files = []
     if args.blenderpath is None:
         print('SX Batcher Error: Blender path not specified')
-
-    elif (args.open is None) and (args.folder is None):
+    elif (args.open is None) and (args.folder is None) and (args.remotetask is None):
         print('SX Batcher Error: No Catalogue or folder specified')
-
     else:
-        if args.folder is not None:
+        if args.remotetask is not None:
+            for task in task_list:
+                file_path = task.replace('//', os.path.sep)
+                source_files.append(os.path.join(asset_path, file_path))
+        elif args.folder is not None:
             source_files = [str(folder + os.sep + f) for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
         elif len(asset_dict) > 0:
             if args.all:

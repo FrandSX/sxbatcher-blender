@@ -2,10 +2,8 @@ import argparse
 import subprocess
 import codecs
 import multiprocessing
-import pathlib
 import time
 import json
-import platform
 from multiprocessing import Pool
 import os
 
@@ -30,7 +28,7 @@ def get_args():
     parser.add_argument('-b', '--blenderpath', default=blender_path, help='Blender executable location')
     parser.add_argument('-o', '--open', default=catalogue_path, help='Open a Catalogue file')
     parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
-    parser.add_argument('-r', '--remotetask', nargs='+', type=str, help='Process distributed task list')
+    parser.add_argument('-r', '--remotetask', nargs='+', type=str, help='Process list of files (distributed mode)')
     parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
     parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
     parser.add_argument('-f', '--filename', help='Export an object by filename')

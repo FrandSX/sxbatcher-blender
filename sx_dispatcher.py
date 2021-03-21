@@ -139,14 +139,25 @@ def get_source_files():
 
 
 def sx_batch(task):
-    ssh = subprocess.Popen(['ssh '+task[0]+'@'+task[1]+' '+task[2]], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    result = ssh.stdout.readlines()
-    for line in result:
-       print(line.decode('utf-8').strip('\n'))
+    p0 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[2]])
+    sts = p0.wait()
+
+    p1 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[3]])
+    sts = p1.wait()
+
+    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+cmd0, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # result = ssh.stdout.readlines()
+    # for line in result:
+    #    print(line.decode('utf-8').strip('\n'))
+
+    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+cmd0, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # result = ssh.stdout.readlines()
+    # for line in result:
+    #    print(line.decode('utf-8').strip('\n'))
 
 
 def sx_collect(collect_task):
-    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batcher_temp/*', '127.0.0.1:'+collect_task[2]])
+    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batcher_temp/*', collect_task[2]])
     sts = p.wait()
 
 
@@ -187,16 +198,16 @@ if __name__ == '__main__':
                         print(file)
 
                     if os == 'win':
-                        cmd = 'mkdir sx_batcher_temp & '
+                        cmd0 = 'mkdir sx_batcher_temp'
                     else:
-                        cmd = 'mkdir -p ~/sx_batcher_temp && '
-                    cmd += 'python3 ~/sxbatcher-blender/sx_manager.py -r'
+                        cmd0 = 'mkdir -p ~/sx_batcher_temp'
+                    cmd1 = 'python3 ~/sxbatcher-blender/sx_manager.py -r'
                     for file in nodefiles:
-                        cmd += ' '+file
-                    cmd += ' -e ~/sx_batcher_temp/'
+                        cmd1 += ' '+file
+                    cmd1 += ' -e ~/sx_batcher_temp/'
                     # cmd += '&&'+'rm -rf ~/sx_dispatch_temp'
 
-                    tasks.append((user, ip, cmd))
+                    tasks.append((user, ip, cmd0, cmd1))
                 i += numcores
 
         collect_tasks = []

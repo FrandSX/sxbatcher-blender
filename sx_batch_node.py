@@ -4,8 +4,25 @@ import codecs
 import multiprocessing
 import time
 import json
+import socket
 from multiprocessing import Pool
 import os
+
+
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+
+ip_addr = get_ip()
+nodename = 'SX Batch Node '+ip_addr
 
 
 def get_args():
@@ -48,16 +65,16 @@ def load_json(file_path):
             input.close()
         return temp_dict
     except ValueError:
-        print('SX Batcher Error: Invalid JSON file.')
+        print(nodename + ' Error: Invalid JSON file.')
         return {}
     except IOError:
-        print('SX Batcher Error: File not found!')
+        print(nodename + ' Error: File not found!')
         return {}
 
 
 def load_conf():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_manager.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_manager.py', 'sx_conf.json')
+    if os.path.isfile(os.path.realpath(__file__).replace('sx_batch_node.py', 'sx_conf.json')):
+        conf_path = os.path.realpath(__file__).replace('sx_batch_node.py', 'sx_conf.json')
         return load_json(conf_path)
     else:
         return {}
@@ -67,7 +84,7 @@ def load_asset_data(catalogue_path):
     if os.path.isfile(catalogue_path):
         return load_json(catalogue_path)
     else:
-        print('SX Batcher: Invalid Catalogue path')
+        print(nodename + ': Invalid Catalogue path')
         return {}
 
 
@@ -105,7 +122,7 @@ if __name__ == '__main__':
 
     args = get_args()
 
-    script_path = str(os.path.realpath(__file__)).replace('sx_manager.py', 'sx_batch.py')
+    script_path = str(os.path.realpath(__file__)).replace('sx_batch_node.py', 'sx_batch.py')
     blender_path = str(args.blenderpath)
     task_list = args.remotetask
     folder = str(args.folder)
@@ -119,17 +136,17 @@ if __name__ == '__main__':
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)
     else:
-        print('SX Batcher: Export path not specified, using paths defined in source files')
+        print(nodename + ': Export path not specified, using paths defined in source files')
     if args.sxtools is not None:
         sxtools_path = os.path.abspath(args.sxtools)
     else:
-        print('SX Batcher Warning: SX Tools path not specified')
+        print(nodename + ' Warning: SX Tools path not specified')
 
     source_files = []
     if args.blenderpath is None:
-        print('SX Batcher Error: Blender path not specified')
+        print(nodename + ' Error: Blender path not specified')
     elif (args.open is None) and (args.folder is None) and (args.remotetask is None):
-        print('SX Batcher Error: No Catalogue or folder specified')
+        print(nodename + ' Error: No Catalogue or folder specified')
     else:
         if args.remotetask is not None:
             for task in task_list:
@@ -163,13 +180,13 @@ if __name__ == '__main__':
                                     file_path = key.replace('//', os.path.sep)
                                     source_files.append(os.path.join(asset_path, file_path))
                 if (args.category is None) and (args.filename is None) and (args.tag is None):
-                    print('Nothing selected for export')
+                    print(nodename + ': Nothing selected for export')
         else:
-            print('SX Batcher Error: Invalid Catalogue')
+            print(nodename + ' Error: Invalid Catalogue')
 
         if len(source_files) > 0:
             source_files = list(set(source_files))
-            print('Source files:')
+            print(nodename + ': Source files:')
             for file in source_files:
                 print(file)
 
@@ -181,12 +198,11 @@ if __name__ == '__main__':
             num_cores = multiprocessing.cpu_count()
 
             then = time.time()
-            print('SX Batcher: Spawning max', num_cores, 'workers')
+            print(nodename + ': Spawning workers ( max', num_cores, ')')
 
             with Pool(processes=num_cores) as pool:
                 pool.map(sx_process, tasks)
 
             now = time.time()
-            print('SX Batcher: Export Finished!')
-            print('Duration:', now-then, 'seconds')
-            print('Objects exported:', len(source_files))
+            print(nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+

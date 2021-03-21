@@ -39,16 +39,16 @@ def load_json(file_path):
             input.close()
         return temp_dict
     except ValueError:
-        print('SX Dispatcher Error: Invalid JSON file.')
+        print('SX Node Manager Error: Invalid JSON file.')
         return {}
     except IOError:
-        print('SX Dispatcher Error: File not found!')
+        print('SX Node Manager Error: File not found!')
         return {}
 
 
 def load_conf():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')
+    if os.path.isfile(os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')):
+        conf_path = os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')
         return load_json(conf_path)
     else:
         return {}
@@ -58,13 +58,13 @@ def load_asset_data(catalogue_path):
     if os.path.isfile(catalogue_path):
         return load_json(catalogue_path)
     else:
-        print('SX Dispatcher: Invalid Catalogue path')
+        print('SX Node Manager: Invalid Catalogue path')
         return {}
 
 
 def load_nodes():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')
+    if os.path.isfile(os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')):
+        conf_path = os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')
         conf = load_json(conf_path)
         nodes_raw = conf['nodes']
 
@@ -72,18 +72,18 @@ def load_nodes():
         nodes = []
         for node in nodes_raw:
             if node['os'] == 'win':
-                if (subprocess.call(['ssh', node['user']+'@'+node['ip'], 'if exist sxbatcher-blender/sx_manager.py echo %errorlevel%'])) == 0:
+                if (subprocess.call(['ssh', node['user']+'@'+node['ip'], 'if exist sxbatcher-blender/sx_batch_node.py echo %errorlevel%'])) == 0:
                     nodes.append(node)
             else:
-                if subprocess.call(['ssh', node['user']+'@'+node['ip'], 'test -e sxbatcher-blender/sx_manager.py']) == 0:
+                if subprocess.call(['ssh', node['user']+'@'+node['ip'], 'test -e sxbatcher-blender/sx_batch_node.py']) == 0:
                     nodes.append(node)
 
         if len(nodes) == 0:
-            print('SX Dispatcher: No network nodes')
+            print('SX Node Manager: No network nodes')
         else:
-            print('SX Dispatcher: Active Nodes')
+            print('SX Node Manager: Active Nodes')
             for node in nodes:
-                print('Node:', node['ip'], 'Cores:', node['numcores'], 'OS:', node['os'])
+                print('Node:', node['ip'], ' / Cores:', node['numcores'], ' / OS:', node['os'])
 
         return nodes
     else:
@@ -104,7 +104,7 @@ def get_source_files():
 
     source_files = []
     if args.open is None:
-        print('SX Dispatcher Error: No Catalogue specified')
+        print('SX Node Manager Error: No Catalogue specified')
     else:
         if len(asset_dict) > 0:
             if args.all:
@@ -128,9 +128,9 @@ def get_source_files():
                                 if tag == value:
                                     source_files.append(key)
                 if (args.category is None) and (args.filename is None) and (args.tag is None):
-                    print('Nothing selected for export')
+                    print('SX Node Manager: Nothing selected for export')
         else:
-            print('SX Dispatcher Error: Invalid Catalogue')
+            print('SX Node Manager Error: Invalid Catalogue')
 
     if len(source_files) > 0:
         source_files = list(set(source_files))
@@ -157,7 +157,7 @@ def sx_batch(task):
 
 
 def sx_collect(collect_task):
-    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batcher_temp/*', collect_task[2]])
+    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batch_temp/*', collect_task[2]])
     sts = p.wait()
 
 
@@ -171,17 +171,16 @@ if __name__ == '__main__':
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)
     else:
-        print('SX Dispatcher: Export collection path not specified!')
+        print('SX Node Manager: Export collection path not specified!')
 
     nodes = load_nodes()
     if len(nodes) > 0:
         source_files = get_source_files()
 
         # -----------------------------------------------------------------
-        #    NOTE: SX Dispatcher expects sxbatcher-blender folder to be
+        #    NOTE: SX Node Manager expects sxbatcher-blender folder to be
         #          located in user home folder. Adapt as necessary!
         # -----------------------------------------------------------------
-        print('\n'+'SX Dispatcher: Generating tasks')
         job_length = len(source_files)
         tasks = []
         i = 0
@@ -193,19 +192,15 @@ if __name__ == '__main__':
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
                 if len(nodefiles) > 0:
-                    print('Node:', ip, 'Task:')
-                    for file in nodefiles:
-                        print(file)
-
                     if os == 'win':
-                        cmd0 = 'mkdir sx_batcher_temp'
+                        cmd0 = 'mkdir sx_batch_temp'
                     else:
-                        cmd0 = 'mkdir -p ~/sx_batcher_temp'
-                    cmd1 = 'python3 ~/sxbatcher-blender/sx_manager.py -r'
+                        cmd0 = 'mkdir -p ~/sx_batch_temp'
+                    cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
-                    cmd1 += ' -e ~/sx_batcher_temp/'
-                    # cmd += '&&'+'rm -rf ~/sx_dispatch_temp'
+                    cmd1 += ' -e ~/sx_batch_temp/'
+                    # cmd += '&&'+'rm -rf ~/sx_batch_temp'
 
                     tasks.append((user, ip, cmd0, cmd1))
                 i += numcores
@@ -216,7 +211,7 @@ if __name__ == '__main__':
 
         if not args.listonly and (len(source_files) > 0):
             then = time.time()
-            print('\n'+'SX Dispatcher: Tasking nodes')
+            print('\n'+'SX Node Manager: Tasking nodes')
 
             with Pool(processes=len(nodes)) as pool:
                 pool.map(sx_batch, tasks)
@@ -225,6 +220,6 @@ if __name__ == '__main__':
                 coll_pool.map(sx_collect, collect_tasks)
 
             now = time.time()
-            print('SX Dispatcher: Export Finished!')
+            print('SX Node Manager: Export Finished!')
             print('Duration:', now-then, 'seconds')
             print('Objects exported:', len(source_files))

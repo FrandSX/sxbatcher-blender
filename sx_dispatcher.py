@@ -146,7 +146,7 @@ def sx_batch(task):
 
 
 def sx_collect(collect_task):
-    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'~/sx_batcher_temp/*', '127.0.0.1:'+collect_task[2]])
+    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batcher_temp/*', '127.0.0.1:'+collect_task[2]])
     sts = p.wait()
 
 

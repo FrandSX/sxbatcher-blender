@@ -138,8 +138,8 @@ def get_source_files():
     return source_files
 
 
-def sx_process(task):
-    ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+task[2], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def sx_batch(task):
+    ssh = subprocess.Popen(['ssh '+task[0]+'@'+task[1]+' '+task[2]], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result = ssh.stdout.readlines()
     for line in result:
        print(line.decode('utf-8').strip('\n'))
@@ -208,7 +208,7 @@ if __name__ == '__main__':
             print('\n'+'SX Dispatcher: Tasking nodes')
 
             with Pool(processes=len(nodes)) as pool:
-                pool.map(sx_process, tasks)
+                pool.map(sx_batch, tasks)
 
             with Pool(processes=len(nodes)) as coll_pool:
                 coll_pool.map(sx_collect, collect_tasks)

@@ -2,5 +2,12 @@
     "blender_path": "//Applications//Blender.app//Contents//MacOS//Blender",
     "catalogue_path": "//Users//bob//work//assets//sx_assets.json",
     "sxtools_path": "//Users//bob//work//sxtools-blender//",
-    "export_path": "//Users//bob//exports//"
+    "export_path": "//Users//bob//exports//",
+    "nodes": [{
+            "ip": "127.0.0.1",
+            "user": "bob",
+            "numcores": "8",
+            "os": "mac"
+        }
+    ]
 }

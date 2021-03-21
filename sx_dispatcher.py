@@ -2,7 +2,6 @@ import argparse
 import subprocess
 import codecs
 import multiprocessing
-import pathlib
 import time
 import json
 import sys
@@ -67,7 +66,26 @@ def load_nodes():
     if os.path.isfile(os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')):
         conf_path = os.path.realpath(__file__).replace('sx_dispatcher.py', 'sx_conf.json')
         conf = load_json(conf_path)
-        return conf['nodes']
+        nodes_raw = conf['nodes']
+
+        # Check node readiness
+        nodes = []
+        for node in nodes_raw:
+            if node['os'] == 'win':
+                if (subprocess.call(['ssh', node['user']+'@'+node['ip'], 'if exist sxbatcher-blender/sx_manager.py echo %errorlevel%'])) == 0:
+                    nodes.append(node)
+            else:
+                if subprocess.call(['ssh', node['user']+'@'+node['ip'], 'test -e sxbatcher-blender/sx_manager.py']) == 0:
+                    nodes.append(node)
+
+        if len(nodes) == 0:
+            print('SX Dispatcher: No network nodes')
+        else:
+            print('SX Dispatcher: Active Nodes')
+            for node in nodes:
+                print('Node:', node['ip'], 'Cores:', node['numcores'], 'OS:', node['os'])
+
+        return nodes
     else:
         return []
 
@@ -145,16 +163,14 @@ if __name__ == '__main__':
         print('SX Dispatcher: Export collection path not specified!')
 
     nodes = load_nodes()
-    if len(nodes) == 0:
-        print('SX Dispatcher: No network nodes specified')
-    else:
+    if len(nodes) > 0:
         source_files = get_source_files()
 
         # -----------------------------------------------------------------
         #    NOTE: SX Dispatcher expects sxbatcher-blender folder to be
         #          located in user home folder. Adapt as necessary!
         # -----------------------------------------------------------------
-        print('SX Dispatcher: Generating tasks')
+        print('\n'+'SX Dispatcher: Generating tasks')
         job_length = len(source_files)
         tasks = []
         i = 0
@@ -166,7 +182,7 @@ if __name__ == '__main__':
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
                 if len(nodefiles) > 0:
-                    print('\n'+'Node:', ip, 'Cores:', numcores, 'Task:')
+                    print('Node:', ip, 'Task:')
                     for file in nodefiles:
                         print(file)
 

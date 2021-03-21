@@ -221,5 +221,5 @@ if __name__ == '__main__':
 
             now = time.time()
             print('SX Node Manager: Export Finished!')
-            print('Duration:', now-then, 'seconds')
+            print('Duration:', round(now-then, 2), 'seconds')
             print('Objects exported:', len(source_files))

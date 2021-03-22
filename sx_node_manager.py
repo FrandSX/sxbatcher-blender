@@ -72,10 +72,12 @@ def load_nodes():
         nodes = []
         for node in nodes_raw:
             if node['os'] == 'win':
-                if (subprocess.call(['ssh', node['user']+'@'+node['ip'], 'if exist sxbatcher-blender/sx_batch_node.py echo %errorlevel%'])) == 0:
+                exists = subprocess.check_output(['ssh', node['user']+'@'+node['ip'], 'if exist %userprofile%\sxbatcher-blender\sx_batch_node.py (echo 1) else (echo 0)'])
+                if int(exists) == 1:
                     nodes.append(node)
             else:
-                if subprocess.call(['ssh', node['user']+'@'+node['ip'], 'test -e sxbatcher-blender/sx_batch_node.py']) == 0:
+                exists = subprocess.check_output(['ssh', node['user']+'@'+node['ip'], ' test -f ~/sxbatcher-blender/sx_batch_node.py && echo 0'])
+                if int(exists) == 0:
                     nodes.append(node)
 
         if len(nodes) == 0:
@@ -145,15 +147,15 @@ def sx_batch(task):
     p1 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[3]])
     sts = p1.wait()
 
-    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+cmd0, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+ task[2], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # result = ssh.stdout.readlines()
     # for line in result:
     #    print(line.decode('utf-8').strip('\n'))
 
-    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+cmd0, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+task[3], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # result = ssh.stdout.readlines()
     # for line in result:
-    #    print(line.decode('utf-8').strip('\n'))
+    #     print(line.decode('utf-8').strip('\n'))
 
 
 def sx_collect(collect_task):

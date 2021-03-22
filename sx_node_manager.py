@@ -161,6 +161,11 @@ def sx_collect(collect_task):
     sts = p.wait()
 
 
+def sx_cleanup(cleanup_task):
+    p = subprocess.Popen(['ssh', cleanup_task[0]+'@'+cleanup_task[1], cleanup_task[2]])
+    sts = p.wait()
+
+
 # ------------------------------------------------------------------------
 #    NOTE: The catalogue file should be located in the root
 #          of your asset folder structure.
@@ -196,11 +201,11 @@ if __name__ == '__main__':
                         cmd0 = 'mkdir sx_batch_temp'
                     else:
                         cmd0 = 'mkdir -p ~/sx_batch_temp'
+
                     cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
                     cmd1 += ' -e ~/sx_batch_temp/'
-                    # cmd += '&&'+'rm -rf ~/sx_batch_temp'
 
                     tasks.append((user, ip, cmd0, cmd1))
                 i += numcores
@@ -208,6 +213,15 @@ if __name__ == '__main__':
         collect_tasks = []
         for node in nodes:
             collect_tasks.append((node['user'], node['ip'], export_path))
+
+        cleanup_tasks = []
+        for node in nodes:
+            if os == 'win':
+                clean_cmd = 'rmdir /Q /S sx_batch_temp'
+            else:
+                clean_cmd = 'rm -rf ~/sx_batch_temp'
+            for node in nodes:
+                cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
 
         if not args.listonly and (len(source_files) > 0):
             then = time.time()
@@ -218,6 +232,9 @@ if __name__ == '__main__':
 
             with Pool(processes=len(nodes)) as coll_pool:
                 coll_pool.map(sx_collect, collect_tasks)
+
+            with Pool(processes=len(nodes)) as cleanup_pool:
+                cleanup_pool.map(sx_cleanup, cleanup_tasks)
 
             now = time.time()
             print('SX Node Manager: Export Finished!')

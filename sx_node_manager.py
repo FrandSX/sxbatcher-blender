@@ -157,7 +157,7 @@ def sx_batch(task):
 
 
 def sx_collect(collect_task):
-    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+'sx_batch_temp/*', collect_task[2]])
+    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+collect_task[2], collect_task[3]])
     sts = p.wait()
 
 
@@ -196,32 +196,43 @@ if __name__ == '__main__':
                 os = node['os']
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
+
                 if len(nodefiles) > 0:
                     if os == 'win':
-                        cmd0 = 'mkdir sx_batch_temp'
+                        cmd0 = 'mkdir %userprofile%\sx_batch_temp'
                     else:
                         cmd0 = 'mkdir -p ~/sx_batch_temp'
 
-                    cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py -r'
+                    if os == 'win':
+                        cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -r'
+                    else:
+                        cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
-                    cmd1 += ' -e ~/sx_batch_temp/'
+                    if os == 'win':
+                        cmd1 += ' -e %userprofile%\sx_batch_temp'
+                    else:
+                        cmd1 += ' -e ~/sx_batch_temp/'
 
                     tasks.append((user, ip, cmd0, cmd1))
                 i += numcores
 
         collect_tasks = []
         for node in nodes:
-            collect_tasks.append((node['user'], node['ip'], export_path))
+            if node['os'] == 'win':
+                collection_path = '%userprofile%\sx_batch_temp\*'
+            else:
+                collection_path = '~/sx_batch_temp/*'
+
+            collect_tasks.append((node['user'], node['ip'], collection_path, export_path))
 
         cleanup_tasks = []
         for node in nodes:
-            if os == 'win':
-                clean_cmd = 'rmdir /Q /S sx_batch_temp'
+            if node['os'] == 'win':
+                clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
             else:
                 clean_cmd = 'rm -rf ~/sx_batch_temp'
-            for node in nodes:
-                cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
+            cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
 
         if not args.listonly and (len(source_files) > 0):
             then = time.time()

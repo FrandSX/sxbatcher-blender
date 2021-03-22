@@ -217,8 +217,15 @@ if __name__ == '__main__':
                     tasks.append((user, ip, cmd0, cmd1))
                 i += numcores
 
-        collect_tasks = []
+        tasked_nodes = []
         for node in nodes:
+            for task in tasks:
+                if task[1] == node['ip']:
+                    tasked_nodes.append(node)
+
+
+        collect_tasks = []
+        for node in tasked_nodes:
             if node['os'] == 'win':
                 collection_path = '%userprofile%\sx_batch_temp\*'
             else:
@@ -227,7 +234,7 @@ if __name__ == '__main__':
             collect_tasks.append((node['user'], node['ip'], collection_path, export_path))
 
         cleanup_tasks = []
-        for node in nodes:
+        for node in tasked_nodes:
             if node['os'] == 'win':
                 clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
             else:

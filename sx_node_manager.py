@@ -253,13 +253,16 @@ if __name__ == '__main__':
                 clean_cmd = 'rm -rf ~/sx_batch_temp'
             cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
 
-        if not args.listonly and (len(source_files) > 0):
-            then = time.time()
-            print('\n'+'SX Node Manager: Tasking nodes')
 
+        if args.updaterepo:
+            print('\n'+'SX Node Manager: Updating Art Repositories')
             if args.updaterepo:
                 with Pool(processes=len(nodes)) as update_pool:
                     update_pool.map(sx_update, update_tasks)
+
+        if not args.listonly and (len(source_files) > 0):
+            then = time.time()
+            print('\n'+'SX Node Manager: Tasking nodes')
 
             with Pool(processes=len(nodes)) as pool:
                 pool.map(sx_batch, tasks)

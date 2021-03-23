@@ -5,6 +5,7 @@ import multiprocessing
 import time
 import json
 import socket
+import shutil
 from multiprocessing import Pool
 import os
 
@@ -137,7 +138,7 @@ if __name__ == '__main__':
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0]
         if args.updaterepo:
-            subprocess.run(['cm', 'update', asset_path])
+            subprocess.call([shutil.which('cm'), 'update', asset_path])
         asset_dict = load_asset_data(catalogue_path)
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)

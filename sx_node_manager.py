@@ -27,6 +27,7 @@ def get_args():
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Local folder where remote exports are collected to')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
+    parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repositories on all nodes to the latest version (PlasticSCM)')
     all_arguments, ignored = parser.parse_known_args()
     return all_arguments
 
@@ -140,6 +141,11 @@ def get_source_files():
     return source_files
 
 
+def sx_update(update_task):
+    p = subprocess.Popen(['ssh', update_task[0]+'@'+update_task[1], update_task[2]])
+    sts = p.wait()
+
+
 def sx_batch(task):
     p0 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[2]])
     sts = p0.wait()
@@ -198,30 +204,22 @@ if __name__ == '__main__':
         i = 0
         while i < job_length:
             for j, node in enumerate(nodes):
-                user = node['user']
-                ip = node['ip']
-                os = node['os']
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
 
                 if len(nodefiles) > 0:
-                    if os == 'win':
+                    if node['os'] == 'win':
                         cmd0 = 'mkdir %userprofile%\sx_batch_temp'
+                        cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+                        cmd1 += ' -e %userprofile%\sx_batch_temp -r'
                     else:
                         cmd0 = 'mkdir -p ~/sx_batch_temp'
-
-                    if os == 'win':
-                        cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -r'
-                    else:
-                        cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py -r'
+                        cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+                        cmd1 += ' -e ~/sx_batch_temp/ -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
-                    if os == 'win':
-                        cmd1 += ' -e %userprofile%\sx_batch_temp'
-                    else:
-                        cmd1 += ' -e ~/sx_batch_temp/'
 
-                    tasks.append((user, ip, cmd0, cmd1))
+                    tasks.append((node['user'], node['ip'], cmd0, cmd1))
                 i += numcores
 
         tasked_nodes = []
@@ -230,6 +228,13 @@ if __name__ == '__main__':
                 if task[1] == node['ip']:
                     tasked_nodes.append(node)
 
+        update_tasks = []
+        for node in nodes:
+            if node['os'] == 'win':
+                upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
+            else:
+                upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
+            update_tasks.append((node['user'], node['ip'], upd_cmd))
 
         collect_tasks = []
         for node in tasked_nodes:
@@ -251,6 +256,10 @@ if __name__ == '__main__':
         if not args.listonly and (len(source_files) > 0):
             then = time.time()
             print('\n'+'SX Node Manager: Tasking nodes')
+
+            if args.updaterepo:
+                with Pool(processes=len(nodes)) as update_pool:
+                    update_pool.map(sx_update, update_tasks)
 
             with Pool(processes=len(nodes)) as pool:
                 pool.map(sx_batch, tasks)

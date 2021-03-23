@@ -53,6 +53,7 @@ def get_args():
     parser.add_argument('-s', '--sxtools', default=sxtools_path, help='SX Tools folder')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Export path')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
+    parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
     all_arguments, ignored = parser.parse_known_args()
     return all_arguments
 
@@ -135,6 +136,8 @@ if __name__ == '__main__':
     catalogue_path = str(args.open)
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0]
+        if args.updaterepo:
+            subprocess.run(['cm', 'update', asset_path])
         asset_dict = load_asset_data(catalogue_path)
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)

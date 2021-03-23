@@ -105,7 +105,10 @@ def sx_process(process_args):
 
     # Primary method: spawns quiet workers
     with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
-        subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
+        try:
+            subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as error:
+            print('SX Batch Error:', source_file)
 
     # Comment above and uncomment below for for debugging (also add "-d" to batch args)
     # subprocess.run(batch_args)

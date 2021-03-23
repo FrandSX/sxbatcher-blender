@@ -158,6 +158,7 @@ if __name__ == '__main__':
     elif (args.open is None) and (args.folder is None) and (args.remotetask is None):
         print(nodename + ' Error: No Catalogue or folder specified')
     else:
+        # Build source file list according to arguments
         if args.remotetask is not None:
             for task in task_list:
                 file_path = task.replace('//', os.path.sep)
@@ -194,12 +195,14 @@ if __name__ == '__main__':
         else:
             print(nodename + ' Error: Invalid Catalogue')
 
+        # Construct node-specific task assignment list
         if len(source_files) > 0:
             source_files = list(set(source_files))
             print(nodename + ': Source files:')
             for file in source_files:
                 print(file)
 
+        # Generate task definition for each headless Blender
         tasks = []
         for file in source_files:
             tasks.append((blender_path, file, script_path, export_path, sxtools_path))

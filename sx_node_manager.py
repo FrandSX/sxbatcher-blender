@@ -175,8 +175,11 @@ def sx_cleanup(cleanup_task):
 
 
 # ------------------------------------------------------------------------
-#    NOTE: The catalogue file should be located in the root
+#    NOTE: 1) The catalogue file should be located in the root
 #          of your asset folder structure.
+#
+#          SX Node Manager expects sxbatcher-blender folder to be
+#          located in user home folder. Adapt as necessary!
 # ------------------------------------------------------------------------
 if __name__ == '__main__':
     args = get_args()
@@ -195,10 +198,8 @@ if __name__ == '__main__':
 
     nodes = load_nodes()
     if len(nodes) > 0:
-        # -----------------------------------------------------------------
-        #    NOTE: SX Node Manager expects sxbatcher-blender folder to be
-        #          located in user home folder. Adapt as necessary!
-        # -----------------------------------------------------------------
+
+        # Task generation for Batch Node
         job_length = len(source_files)
         tasks = []
         i = 0
@@ -222,12 +223,14 @@ if __name__ == '__main__':
                     tasks.append((node['user'], node['ip'], cmd0, cmd1))
                 i += numcores
 
+        # Only collect and clean up nodes that have been tasked
         tasked_nodes = []
         for node in nodes:
             for task in tasks:
                 if task[1] == node['ip']:
                     tasked_nodes.append(node)
 
+        # Task for updating a version-controlled asset folder (currently using PlasticSCM)
         update_tasks = []
         for node in nodes:
             if node['os'] == 'win':
@@ -236,6 +239,7 @@ if __name__ == '__main__':
                 upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
             update_tasks.append((node['user'], node['ip'], upd_cmd))
 
+        # Task for collecting generated FBX files from the node
         collect_tasks = []
         for node in tasked_nodes:
             if node['os'] == 'win':
@@ -245,6 +249,7 @@ if __name__ == '__main__':
 
             collect_tasks.append((node['user'], node['ip'], collection_path, export_path))
 
+        # Clean up afterwards, delete temp folder and contents
         cleanup_tasks = []
         for node in tasked_nodes:
             if node['os'] == 'win':

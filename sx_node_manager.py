@@ -180,10 +180,15 @@ if __name__ == '__main__':
     else:
         print('SX Node Manager: Export collection path not specified!')
 
+    source_files = get_source_files()
+
+    if args.listonly:
+        print('Found', len(source_files), 'source files:')
+        for file in source_files:
+            print(file)
+
     nodes = load_nodes()
     if len(nodes) > 0:
-        source_files = get_source_files()
-
         # -----------------------------------------------------------------
         #    NOTE: SX Node Manager expects sxbatcher-blender folder to be
         #          located in user home folder. Adapt as necessary!

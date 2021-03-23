@@ -136,7 +136,7 @@ if __name__ == '__main__':
     tag = str(args.tag)
     catalogue_path = str(args.open)
     if args.open is not None:
-        asset_path = os.path.split(catalogue_path)[0]
+        asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)
         if args.updaterepo:
             if os.name == 'nt':
                 subprocess.call(['"C:\Program Files\PlasticSCM5\client\cm.exe" update '+asset_path], shell=True)

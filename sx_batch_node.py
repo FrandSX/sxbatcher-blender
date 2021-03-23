@@ -138,7 +138,10 @@ if __name__ == '__main__':
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0]
         if args.updaterepo:
-            subprocess.call([shutil.which('cm'), 'update', asset_path])
+            if os.name == 'nt':
+                subprocess.call(['"C:\Program Files\PlasticSCM5\client\cm.exe" update '+asset_path], shell=True)
+            else:
+                subprocess.call(['/usr/local/bin/cm update '+asset_path], shell=True)
         asset_dict = load_asset_data(catalogue_path)
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)

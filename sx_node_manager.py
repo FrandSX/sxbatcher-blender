@@ -73,12 +73,12 @@ def load_nodes():
         nodes = []
         for node in nodes_raw:
             if node['os'] == 'win':
-                exists = subprocess.check_output(['ssh', node['user']+'@'+node['ip'], 'if exist %userprofile%\sxbatcher-blender\sx_batch_node.py (echo 1) else (echo 0)'])
-                if int(exists) == 1:
+                exists = subprocess.run(['ssh', node['user']+'@'+node['ip'], 'if exist %userprofile%\sxbatcher-blender\sx_batch_node.py (cd.) else (call)'], capture_output=True)
+                if exists.returncode == 0:
                     nodes.append(node)
             else:
-                exists = subprocess.check_output(['ssh', node['user']+'@'+node['ip'], ' test -f ~/sxbatcher-blender/sx_batch_node.py && echo 0'])
-                if int(exists) == 0:
+                exists = subprocess.run(['ssh', node['user']+'@'+node['ip'], ' test -f ~/sxbatcher-blender/sx_batch_node.py'], capture_output=True)
+                if exists.returncode == 0:
                     nodes.append(node)
 
         if len(nodes) == 0:
@@ -142,36 +142,22 @@ def get_source_files():
 
 
 def sx_update(update_task):
-    p = subprocess.Popen(['ssh', update_task[0]+'@'+update_task[1], update_task[2]])
-    sts = p.wait()
+    p = subprocess.run(['ssh', update_task[0]+'@'+update_task[1], update_task[2]], capture_output=True)
 
 
 def sx_batch(task):
-    p0 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[2]])
-    sts = p0.wait()
-
-    p1 = subprocess.Popen(['ssh', task[0]+'@'+task[1], task[3]])
-    sts = p1.wait()
-
-    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+ task[2], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # result = ssh.stdout.readlines()
-    # for line in result:
-    #    print(line.decode('utf-8').strip('\n'))
-
-    # ssh = subprocess.Popen('ssh '+task[0]+'@'+task[1]+' '+task[3], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # result = ssh.stdout.readlines()
-    # for line in result:
-    #     print(line.decode('utf-8').strip('\n'))
+    p0 = subprocess.run(['ssh', task[0]+'@'+task[1], task[2]], capture_output=True)
+    p1 = subprocess.run(['ssh', task[0]+'@'+task[1], task[3]], text=True, capture_output=True)
+    print(p1.stdout)
 
 
 def sx_collect(collect_task):
-    p = subprocess.Popen(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+collect_task[2], collect_task[3]])
-    sts = p.wait()
+    p = subprocess.run(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+collect_task[2], collect_task[3]], text=True, capture_output=True)
+    print('SX Node Manager: Results collected from', collect_task[1], 'to', collect_task[3])
 
 
 def sx_cleanup(cleanup_task):
-    p = subprocess.Popen(['ssh', cleanup_task[0]+'@'+cleanup_task[1], cleanup_task[2]])
-    sts = p.wait()
+    p = subprocess.run(['ssh', cleanup_task[0]+'@'+cleanup_task[1], cleanup_task[2]], capture_output=True)
 
 
 # ------------------------------------------------------------------------
@@ -227,7 +213,7 @@ if __name__ == '__main__':
         tasked_nodes = []
         for node in nodes:
             for task in tasks:
-                if task[1] == node['ip']:
+                if (task[1] == node['ip']) and (node not in tasked_nodes):
                     tasked_nodes.append(node)
 
         # Task for updating a version-controlled asset folder (currently using PlasticSCM)
@@ -267,7 +253,7 @@ if __name__ == '__main__':
 
         if not args.listonly and (len(source_files) > 0):
             then = time.time()
-            print('\n'+'SX Node Manager: Tasking nodes')
+            print('\n'+'SX Node Manager: Assigning Tasks')
 
             with Pool(processes=len(nodes)) as pool:
                 pool.map(sx_batch, tasks)

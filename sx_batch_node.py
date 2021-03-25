@@ -110,8 +110,6 @@ def sx_process(process_args):
     if subdivision is not None:
         batch_args.extend(["-sd", subdivision])
 
-    print('batch arging', batch_args)
-
     # Primary method: spawns quiet workers
     with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
         try:

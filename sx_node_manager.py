@@ -195,7 +195,6 @@ if __name__ == '__main__':
             for j, node in enumerate(nodes):
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
-                subdivision = str(args.subdivision)
 
                 if len(nodefiles) > 0:
                     if node['os'] == 'win':
@@ -208,8 +207,8 @@ if __name__ == '__main__':
                         cmd1 += ' -e ~/sx_batch_temp/ -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
-                    if subdivision is not None:
-                        cmd1 += ' -sd '+subdivision
+                    if args.subdivision is not None:
+                        cmd1 += ' -sd '+str(args.subdivision)
 
                     tasks.append((node['user'], node['ip'], cmd0, cmd1))
                 i += numcores
@@ -272,4 +271,4 @@ if __name__ == '__main__':
             now = time.time()
             print('SX Node Manager: Export Finished!')
             print('Duration:', round(now-then, 2), 'seconds')
-            print('Objects exported:', len(source_files))
+            print('Source Files Processed:', len(source_files))

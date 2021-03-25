@@ -142,7 +142,8 @@ def get_source_files():
 
 
 def sx_update(update_task):
-    p = subprocess.run(['ssh', update_task[0]+'@'+update_task[1], update_task[2]], capture_output=True)
+    p = subprocess.run(['ssh', update_task[0]+'@'+update_task[1], update_task[2]], text=True, capture_output=True)
+    print(p.stdout)
 
 
 def sx_batch(task):

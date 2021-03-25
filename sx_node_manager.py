@@ -26,6 +26,7 @@ def get_args():
     parser.add_argument('-f', '--filename', help='Export an object by filename')
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Local folder where remote exports are collected to')
+    parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
     parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repositories on all nodes to the latest version (PlasticSCM)')
     all_arguments, ignored = parser.parse_known_args()
@@ -194,6 +195,7 @@ if __name__ == '__main__':
             for j, node in enumerate(nodes):
                 numcores = int(node['numcores'])
                 nodefiles = source_files[i:(i + numcores)]
+                subdivision = str(args.subdivision)
 
                 if len(nodefiles) > 0:
                     if node['os'] == 'win':
@@ -206,6 +208,8 @@ if __name__ == '__main__':
                         cmd1 += ' -e ~/sx_batch_temp/ -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
+                    if subdivision is not None:
+                        cmd1 += ' -sd '+subdivision
 
                     tasks.append((node['user'], node['ip'], cmd0, cmd1))
                 i += numcores

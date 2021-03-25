@@ -52,6 +52,7 @@ def get_args():
     parser.add_argument('-f', '--filename', help='Export an object by filename')
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
     parser.add_argument('-s', '--sxtools', default=sxtools_path, help='SX Tools folder')
+    parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Export path')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
     parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
@@ -96,6 +97,7 @@ def sx_process(process_args):
     script_path = process_args[2]
     export_path = process_args[3]
     sxtools_path = process_args[4]
+    subdivision = process_args[5]
 
     batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
 
@@ -104,6 +106,11 @@ def sx_process(process_args):
 
     if sxtools_path is not None:
         batch_args.extend(["-l", sxtools_path])
+
+    if subdivision is not None:
+        batch_args.extend(["-sd", subdivision])
+
+    print('batch arging', batch_args)
 
     # Primary method: spawns quiet workers
     with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
@@ -134,6 +141,10 @@ if __name__ == '__main__':
     category = str(args.category)
     filename = str(args.filename)
     tag = str(args.tag)
+    if args.subdivision is not None:
+        subdivision = str(args.subdivision)
+    else:
+        subdivision = None
     catalogue_path = str(args.open)
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)
@@ -205,7 +216,7 @@ if __name__ == '__main__':
         # Generate task definition for each headless Blender
         tasks = []
         for file in source_files:
-            tasks.append((blender_path, file, script_path, export_path, sxtools_path))
+            tasks.append((blender_path, file, script_path, export_path, sxtools_path, subdivision))
 
         if not args.listonly and (len(source_files) != 0):
             num_cores = multiprocessing.cpu_count()

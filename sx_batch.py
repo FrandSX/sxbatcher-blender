@@ -14,6 +14,8 @@ def get_args():
 	parser.add_argument('-x', '--exportpath', help='Export Path')
 	parser.add_argument('-l', '--librarypath', help='SX Tools Library Path')
 	parser.add_argument('-sd', '--subdivision', help='Subdivision Level Override')
+	parser.add_argument('-sp', '--palette', help='Palette Override')
+    parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='Flatten layers to VertexColor0')
 	parsed_script_args, _ = parser.parse_known_args(script_args)
 	return parsed_script_args
 
@@ -38,8 +40,16 @@ if args.subdivision is not None:
 		if 'sxtools' in obj.keys():
 			obj.sxtools.subdivisionlevel = subdivision
 
-bpy.ops.sxtools.macro('EXEC_DEFAULT')
+if args.palette is not None:
+	palette = str(args.palette)
+	bpy.ops.sxtools.applypalette('EXEC_DEFAULT', label=palette)
 
+if args.staticvertexcolors is not None:
+	for obj in bpy.context.view_layer.objects.selected:
+		if 'sxtools' in obj.keys():
+			obj['staticVertexColors'] = bool(args.staticvertexcolors)
+
+bpy.ops.sxtools.macro('EXEC_DEFAULT')
 bpy.ops.sxtools.exportfiles('EXEC_DEFAULT')
 
 bpy.ops.wm.quit_blender('EXEC_DEFAULT')

@@ -27,6 +27,8 @@ def get_args():
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Local folder where remote exports are collected to')
     parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
+    parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
+    parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
     parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repositories on all nodes to the latest version (PlasticSCM)')
     all_arguments, ignored = parser.parse_known_args()
@@ -209,6 +211,10 @@ if __name__ == '__main__':
                         cmd1 += ' '+file
                     if args.subdivision is not None:
                         cmd1 += ' -sd '+str(args.subdivision)
+                    if args.palette is not None:
+                        cmd1 += ' -sp '+str(args.palette)
+                    if args.staticvertexcolors is not None:
+                        cmd1 += ' -st'
 
                     tasks.append((node['user'], node['ip'], cmd0, cmd1))
                 i += numcores

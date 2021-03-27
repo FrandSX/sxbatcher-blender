@@ -100,7 +100,8 @@ def sx_process(process_args):
     export_path = process_args[3]
     sxtools_path = process_args[4]
     subdivision = process_args[5]
-    staticvertexcolors = process_args[6]
+    palette = process_args[6]
+    staticvertexcolors = process_args[7]
 
     batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
 
@@ -116,7 +117,7 @@ def sx_process(process_args):
     if palette is not None:
         batch_args.extend(["-sp", palette])
 
-    if staticvertexcolors is not None:
+    if staticvertexcolors:
         batch_args.extend(["-st"])
 
     # Primary method: spawns quiet workers

@@ -14,6 +14,7 @@ class sx_globals(object):
         self.conf = None
         self.source_files = None
         self.nodes = None
+        self.tasked_nodes = None
         self.updaterepo = None
         self.staticvertexcolors = None
         self.subdivision = None
@@ -63,14 +64,6 @@ def init_globals():
     if sxglobals.catalogue_path is None:
         print('SX Node Manager: No Catalogue specified')
 
-    sxglobals.source_files = get_source_files()
-    sxglobals.nodes = load_nodes()
-
-    if args.listonly and len(sxglobals.source_files) > 0:
-        print('\nFound', len(sxglobals.source_files), 'source files:')
-        for file in sxglobals.source_files:
-            print(file)
-
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -104,7 +97,7 @@ def load_json(file_path):
         return {}
 
 
-def load_nodes():
+def get_nodes():
     nodes = []
     if 'nodes' in sxglobals.conf.keys() and len(sxglobals.conf['nodes']) > 0:
         nodes_raw = sxglobals.conf['nodes']
@@ -171,8 +164,25 @@ def get_source_files():
     return source_files
 
 
-def sx_update(update_task):
-    p = subprocess.run(['ssh', update_task[0]+'@'+update_task[1], update_task[2]], text=True, capture_output=True)
+def sx_init_batch():
+    pass
+
+
+def sx_init_housekeeping(nodes, ep):
+    sxglobals.nodes = nodes
+    sxglobals.tasked_nodes = nodes
+    sxglobals.export_path = ep
+
+
+# Task for updating a version-controlled asset folder (currently using PlasticSCM)
+def sx_update(i):
+    node = sxglobals.nodes[i]
+    if node['os'] == 'win':
+        upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
+    else:
+        upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
+
+    p = subprocess.run(['ssh', node['user']+'@'+node['ip'], upd_cmd], text=True, capture_output=True)
     print(p.stdout)
 
 
@@ -182,13 +192,25 @@ def sx_batch(task):
     print(p1.stdout)
 
 
-def sx_collect(collect_task):
-    p = subprocess.run(['scp', '-r', collect_task[0]+'@'+collect_task[1]+':'+collect_task[2], collect_task[3]], text=True, capture_output=True)
-    print('SX Node Manager: Results collected from', collect_task[1], 'to', collect_task[3])
+def sx_collect(i):
+    node = sxglobals.tasked_nodes[i]
+    if node['os'] == 'win':
+        collection_path = '%userprofile%\sx_batch_temp\*'
+    else:
+        collection_path = '~/sx_batch_temp/*'
+
+    p = subprocess.run(['scp', '-r', node['user']+'@'+node['ip']+':'+collection_path, sxglobals.export_path], text=True, capture_output=True)
+    print('SX Node Manager: Results collected from', node['ip'], 'to', sxglobals.export_path)
 
 
-def sx_cleanup(cleanup_task):
-    p = subprocess.run(['ssh', cleanup_task[0]+'@'+cleanup_task[1], cleanup_task[2]], capture_output=True)
+def sx_cleanup(i):
+    node = sxglobals.tasked_nodes[i]
+    if node['os'] == 'win':
+        clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
+    else:
+        clean_cmd = 'rm -rf ~/sx_batch_temp'
+
+    p = subprocess.run(['ssh', node['user']+'@'+node['ip'], clean_cmd], capture_output=True)
 
 
 # ------------------------------------------------------------------------
@@ -202,9 +224,16 @@ sxglobals = sx_globals()
 
 if __name__ == '__main__':
     init_globals()
+    sxglobals.source_files = get_source_files()
+    sxglobals.nodes = get_nodes()
+
+    if sxglobals.listonly and len(sxglobals.source_files) > 0:
+        print('\nFound', len(sxglobals.source_files), 'source files:')
+        for file in sxglobals.source_files:
+            print(file)
+
 
     if len(sxglobals.nodes) > 0:
-
         # Task generation for Batch Node
         job_length = len(sxglobals.source_files)
         tasks = []
@@ -236,57 +265,29 @@ if __name__ == '__main__':
                 i += numcores
 
         # Only collect and clean up nodes that have been tasked
-        tasked_nodes = []
+        sxglobals.tasked_nodes = []
         for node in sxglobals.nodes:
             for task in tasks:
-                if (task[1] == node['ip']) and (node not in tasked_nodes):
-                    tasked_nodes.append(node)
-
-        # Task for updating a version-controlled asset folder (currently using PlasticSCM)
-        update_tasks = []
-        for node in sxglobals.nodes:
-            if node['os'] == 'win':
-                upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
-            else:
-                upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
-            update_tasks.append((node['user'], node['ip'], upd_cmd))
-
-        # Task for collecting generated FBX files from the node
-        collect_tasks = []
-        for node in tasked_nodes:
-            if node['os'] == 'win':
-                collection_path = '%userprofile%\sx_batch_temp\*'
-            else:
-                collection_path = '~/sx_batch_temp/*'
-
-            collect_tasks.append((node['user'], node['ip'], collection_path, sxglobals.export_path))
-
-        # Clean up afterwards, delete temp folder and contents
-        cleanup_tasks = []
-        for node in tasked_nodes:
-            if node['os'] == 'win':
-                clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
-            else:
-                clean_cmd = 'rm -rf ~/sx_batch_temp'
-            cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
+                if (task[1] == node['ip']) and (node not in sxglobals.tasked_nodes):
+                    sxglobals.tasked_nodes.append(node)
 
         if sxglobals.updaterepo:
             print('\n'+'SX Node Manager: Updating Art Repositories')
-            with Pool(processes=len(sxglobals.nodes)) as update_pool:
-                update_pool.map(sx_update, update_tasks)
+            with Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.nodes, None), maxtasksperchild=1) as update_pool:
+                update_pool.map(sx_update, range(len(sxglobals.nodes)))
 
         if not sxglobals.listonly and (len(sxglobals.source_files) > 0):
             then = time.time()
             print('\n'+'SX Node Manager: Assigning Tasks')
 
-            with Pool(processes=len(sxglobals.nodes)) as pool:
-                pool.map(sx_batch, tasks)
+            with Pool(processes=len(sxglobals.nodes)) as batch_pool:
+                batch_pool.map(sx_batch, tasks)
 
-            with Pool(processes=len(sxglobals.nodes)) as coll_pool:
-                coll_pool.map(sx_collect, collect_tasks)
+            with Pool(processes=len(sxglobals.tasked_nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, sxglobals.export_path), maxtasksperchild=1) as collect_pool:
+                collect_pool.map(sx_collect, range(len(sxglobals.tasked_nodes)))
 
-            with Pool(processes=len(sxglobals.nodes)) as cleanup_pool:
-                cleanup_pool.map(sx_cleanup, cleanup_tasks)
+            with Pool(processes=len(sxglobals.tasked_nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, None), maxtasksperchild=1) as cleanup_pool:
+                cleanup_pool.map(sx_cleanup, range(len(sxglobals.tasked_nodes)))
 
             now = time.time()
             print('SX Node Manager: Export Finished!')

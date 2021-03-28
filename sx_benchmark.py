@@ -163,7 +163,7 @@ if __name__ == '__main__':
         for file in source_files:
             tasks.append((blender_path, file, script_path, export_path, sxtools_path))
 
-        if len(source_files) != 0:
+        if len(source_files) > 0:
             N = len(tasks)
             print(nodename + ': Spawning workers ( max', multiprocessing.cpu_count(), ')')
 
@@ -173,7 +173,9 @@ if __name__ == '__main__':
                 pool.map(sx_process, range(N))
 
             now = time.time()
-            print(nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+
             times = results[:]
             for i, file in enumerate(source_files):
                 print(file, times[i])
+
+            print(nodename + ':', len(source_files), 'full Catalogue export in', round(now-then, 2), 'seconds\n')

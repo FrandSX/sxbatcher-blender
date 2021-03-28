@@ -9,23 +9,77 @@ from multiprocessing import Pool
 import os
 
 
+class sx_globals(object):
+    def __init__(self):
+        self.conf = None
+        self.source_files = None
+        self.nodes = None
+        self.updaterepo = None
+        self.staticvertexcolors = None
+        self.subdivision = None
+        self.palette = None
+        self.exportpath = None
+        self.listonly = None
+        self.catalogue_path = None
+        self.export_path = None
+        self.category = None
+        self.filename = None
+        self.tag = None
+        self.all = None
+
+
+def init_globals():
+    sxglobals.conf = load_json(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json'))
+    cp = sxglobals.conf.get('catalogue_path')
+    ep = sxglobals.conf.get('export_path')
+    if cp is not None:
+        sxglobals.catalogue_path = cp.replace('//', os.path.sep) if os.path.isfile(cp.replace('//', os.path.sep)) else None
+    if ep is not None:
+        sxglobals.export_path = ep.replace('//', os.path.sep) if os.path.isdir(ep.replace('//', os.path.sep)) else None
+
+    args = get_args()
+    sxglobals.updaterepo = args.updaterepo
+    sxglobals.all = args.all
+    sxglobals.staticvertexcolors = args.staticvertexcolors
+    sxglobals.listonly = args.listonly
+    if args.subdivision is not None:
+        sxglobals.subdivision = str(args.subdivision)
+    if args.palette is not None:
+        sxglobals.palette = str(args.palette)
+    if args.exportpath is not None:
+        sxglobals.export_path = os.path.abspath(args.exportpath)
+    else:
+        print('SX Node Manager: Export collection path not specified')
+
+    if args.category is not None:
+        sxglobals.category = str(args.category)
+    if args.filename is not None:
+        sxglobals.filename = str(args.filename)
+    if args.tag is not None:
+        sxglobals.tag = str(args.tag)
+    if args.open is not None:
+        sxglobals.catalogue_path = str(args.open)
+
+    if sxglobals.catalogue_path is None:
+        print('SX Node Manager: No Catalogue specified')
+
+    sxglobals.source_files = get_source_files()
+    sxglobals.nodes = load_nodes()
+
+    if args.listonly and len(sxglobals.source_files) > 0:
+        print('\nFound', len(sxglobals.source_files), 'source files:')
+        for file in sxglobals.source_files:
+            print(file)
+
+
 def get_args():
-    conf = load_conf()
-    catalogue_path = conf.get('catalogue_path')
-    export_path = conf.get('export_path')
-
-    if catalogue_path is not None:
-        catalogue_path = catalogue_path.replace('//', os.path.sep) if os.path.isfile(catalogue_path.replace('//', os.path.sep)) else None
-    if export_path is not None:
-        export_path = export_path.replace('//', os.path.sep) if os.path.isdir(export_path.replace('//', os.path.sep)) else None
-
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--open', default=catalogue_path, help='Open a Catalogue file')
+    parser.add_argument('-o', '--open', default=sxglobals.catalogue_path, help='Open a Catalogue file')
     parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
     parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
     parser.add_argument('-f', '--filename', help='Export an object by filename')
     parser.add_argument('-t', '--tag', help='Export all tagged objects')
-    parser.add_argument('-e', '--exportpath', default=export_path, help='Local folder where remote exports are collected to')
+    parser.add_argument('-e', '--exportpath', default=sxglobals.export_path, help='Local folder where remote exports are collected to')
     parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
     parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
     parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
@@ -43,103 +97,76 @@ def load_json(file_path):
             input.close()
         return temp_dict
     except ValueError:
-        print('SX Node Manager Error: Invalid JSON file.')
+        print('SX Node Manager: Invalid file', file_path)
         return {}
     except IOError:
-        print('SX Node Manager Error: File not found!')
-        return {}
-
-
-def load_conf():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')
-        return load_json(conf_path)
-    else:
-        return {}
-
-
-def load_asset_data(catalogue_path):
-    if os.path.isfile(catalogue_path):
-        return load_json(catalogue_path)
-    else:
-        print('SX Node Manager: Invalid Catalogue path')
+        print('SX Node Manager: File not found', file_path)
         return {}
 
 
 def load_nodes():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_node_manager.py', 'sx_conf.json')
-        conf = load_json(conf_path)
-        nodes_raw = conf['nodes']
+    nodes = []
+    if 'nodes' in sxglobals.conf.keys() and len(sxglobals.conf['nodes']) > 0:
+        nodes_raw = sxglobals.conf['nodes']
 
-        # Check node readiness
-        nodes = []
+        # Check if node is available
         for node in nodes_raw:
             if node['os'] == 'win':
-                exists = subprocess.run(['ssh', node['user']+'@'+node['ip'], 'if exist %userprofile%\sxbatcher-blender\sx_batch_node.py (cd.) else (call)'], capture_output=True)
-                if exists.returncode == 0:
-                    nodes.append(node)
+                cmd_string = 'if exist %userprofile%\sxbatcher-blender\sx_batch_node.py (cd.) else (call)'
             else:
-                exists = subprocess.run(['ssh', node['user']+'@'+node['ip'], ' test -f ~/sxbatcher-blender/sx_batch_node.py'], capture_output=True)
-                if exists.returncode == 0:
-                    nodes.append(node)
+                cmd_string = 'test -f ~/sxbatcher-blender/sx_batch_node.py'
+
+            available = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd_string], capture_output=True)
+            if available.returncode == 0:
+                nodes.append(node)
 
         if len(nodes) == 0:
-            print('SX Node Manager: No network nodes')
+            print('\nSX Node Manager: No network nodes')
         else:
-            print('SX Node Manager: Active Nodes')
+            print('\nSX Node Manager: Active Nodes')
             for node in nodes:
-                print('Node:', node['ip'], ' / Cores:', node['numcores'], ' / OS:', node['os'])
+                print('Node:', node['ip'], '\tCores:', node['numcores'], '\tOS:', node['os'])
 
-        return nodes
-    else:
-        return []
+    return nodes
 
 
 def get_source_files():
-    asset_path = None
-    export_path = None
-
-    args = get_args()
-    category = str(args.category)
-    filename = str(args.filename)
-    tag = str(args.tag)
-    catalogue_path = str(args.open)
-    if args.open is not None:
-        asset_dict = load_asset_data(catalogue_path)
-
     source_files = []
-    if args.open is None:
-        print('SX Node Manager Error: No Catalogue specified')
-    else:
-        if len(asset_dict) > 0:
-            if args.all:
+    asset_dict = {}
+
+    if sxglobals.catalogue_path is not None:
+        asset_dict = load_json(sxglobals.catalogue_path)
+
+    if len(asset_dict) > 0:
+        if sxglobals.all:
+            for category in asset_dict.keys():
+                for key in asset_dict[category].keys():
+                    source_files.append(key)
+        else:
+            if sxglobals.category is not None:
+                if sxglobals.category in asset_dict.keys():
+                    for key in asset_dict[sxglobals.category].keys():
+                        source_files.append(key)
+            if sxglobals.filename is not None:
                 for category in asset_dict.keys():
                     for key in asset_dict[category].keys():
-                        source_files.append(key)
-            else:
-                if args.category is not None:
-                    if category in asset_dict.keys():
-                        for key in asset_dict[category].keys():
+                        if sxglobals.filename in key:
                             source_files.append(key)
-                if args.filename is not None:
-                    for category in asset_dict.keys():
-                        for key in asset_dict[category].keys():
-                            if filename in key:
+            if sxglobals.tag is not None:
+                for category in asset_dict.keys():
+                    for key, values in asset_dict[category].items():
+                        for value in values:
+                            if sxglobals.tag == value:
                                 source_files.append(key)
-                if args.tag is not None:
-                    for category in asset_dict.keys():
-                        for key, values in asset_dict[category].items():
-                            for value in values:
-                                if tag == value:
-                                    source_files.append(key)
-                if (args.category is None) and (args.filename is None) and (args.tag is None):
-                    print('SX Node Manager: Nothing selected for export')
-        else:
-            print('SX Node Manager Error: Invalid Catalogue')
+            if (sxglobals.category is None) and (sxglobals.filename is None) and (sxglobals.tag is None) and not sxglobals.updaterepo:
+                print('SX Node Manager: Nothing selected for export')
+    else:
+        print('SX Node Manager: Invalid Catalogue')
 
     if len(source_files) > 0:
         source_files = list(set(source_files))
+    elif (len(source_files) == 0) and (sxglobals.all or (sxglobals.category is not None) or (sxglobals.filename is not None) or (sxglobals.tag is not None)):
+        print('\nSX Node Manager: No matching files in Catalogue')
 
     return source_files
 
@@ -171,32 +198,21 @@ def sx_cleanup(cleanup_task):
 #          SX Node Manager expects sxbatcher-blender folder to be
 #          located in user home folder. Adapt as necessary!
 # ------------------------------------------------------------------------
+sxglobals = sx_globals()
+
 if __name__ == '__main__':
-    args = get_args()
+    init_globals()
 
-    if args.exportpath is not None:
-        export_path = os.path.abspath(args.exportpath)
-    else:
-        print('SX Node Manager: Export collection path not specified!')
-
-    source_files = get_source_files()
-
-    if args.listonly:
-        print('Found', len(source_files), 'source files:')
-        for file in source_files:
-            print(file)
-
-    nodes = load_nodes()
-    if len(nodes) > 0:
+    if len(sxglobals.nodes) > 0:
 
         # Task generation for Batch Node
-        job_length = len(source_files)
+        job_length = len(sxglobals.source_files)
         tasks = []
         i = 0
         while i < job_length:
-            for j, node in enumerate(nodes):
+            for j, node in enumerate(sxglobals.nodes):
                 numcores = int(node['numcores'])
-                nodefiles = source_files[i:(i + numcores)]
+                nodefiles = sxglobals.source_files[i:(i + numcores)]
 
                 if len(nodefiles) > 0:
                     if node['os'] == 'win':
@@ -209,11 +225,11 @@ if __name__ == '__main__':
                         cmd1 += ' -e ~/sx_batch_temp/ -r'
                     for file in nodefiles:
                         cmd1 += ' '+file
-                    if args.subdivision is not None:
-                        cmd1 += ' -sd '+str(args.subdivision)
-                    if args.palette is not None:
-                        cmd1 += ' -sp '+str(args.palette)
-                    if args.staticvertexcolors is not None:
+                    if sxglobals.subdivision is not None:
+                        cmd1 += ' -sd '+sxglobals.subdivision
+                    if sxglobals.palette is not None:
+                        cmd1 += ' -sp '+sxglobals.palette
+                    if sxglobals.staticvertexcolors:
                         cmd1 += ' -st'
 
                     tasks.append((node['user'], node['ip'], cmd0, cmd1))
@@ -221,14 +237,14 @@ if __name__ == '__main__':
 
         # Only collect and clean up nodes that have been tasked
         tasked_nodes = []
-        for node in nodes:
+        for node in sxglobals.nodes:
             for task in tasks:
                 if (task[1] == node['ip']) and (node not in tasked_nodes):
                     tasked_nodes.append(node)
 
         # Task for updating a version-controlled asset folder (currently using PlasticSCM)
         update_tasks = []
-        for node in nodes:
+        for node in sxglobals.nodes:
             if node['os'] == 'win':
                 upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
             else:
@@ -243,7 +259,7 @@ if __name__ == '__main__':
             else:
                 collection_path = '~/sx_batch_temp/*'
 
-            collect_tasks.append((node['user'], node['ip'], collection_path, export_path))
+            collect_tasks.append((node['user'], node['ip'], collection_path, sxglobals.export_path))
 
         # Clean up afterwards, delete temp folder and contents
         cleanup_tasks = []
@@ -254,27 +270,25 @@ if __name__ == '__main__':
                 clean_cmd = 'rm -rf ~/sx_batch_temp'
             cleanup_tasks.append((node['user'], node['ip'], clean_cmd))
 
-
-        if args.updaterepo:
+        if sxglobals.updaterepo:
             print('\n'+'SX Node Manager: Updating Art Repositories')
-            if args.updaterepo:
-                with Pool(processes=len(nodes)) as update_pool:
-                    update_pool.map(sx_update, update_tasks)
+            with Pool(processes=len(sxglobals.nodes)) as update_pool:
+                update_pool.map(sx_update, update_tasks)
 
-        if not args.listonly and (len(source_files) > 0):
+        if not sxglobals.listonly and (len(sxglobals.source_files) > 0):
             then = time.time()
             print('\n'+'SX Node Manager: Assigning Tasks')
 
-            with Pool(processes=len(nodes)) as pool:
+            with Pool(processes=len(sxglobals.nodes)) as pool:
                 pool.map(sx_batch, tasks)
 
-            with Pool(processes=len(nodes)) as coll_pool:
+            with Pool(processes=len(sxglobals.nodes)) as coll_pool:
                 coll_pool.map(sx_collect, collect_tasks)
 
-            with Pool(processes=len(nodes)) as cleanup_pool:
+            with Pool(processes=len(sxglobals.nodes)) as cleanup_pool:
                 cleanup_pool.map(sx_cleanup, cleanup_tasks)
 
             now = time.time()
             print('SX Node Manager: Export Finished!')
             print('Duration:', round(now-then, 2), 'seconds')
-            print('Source Files Processed:', len(source_files))
+            print('Source Files Processed:', len(sxglobals.source_files))

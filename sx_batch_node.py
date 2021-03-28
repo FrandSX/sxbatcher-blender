@@ -78,8 +78,8 @@ def load_json(file_path):
 
 
 def load_conf():
-    if os.path.isfile(os.path.realpath(__file__).replace('sx_batch_node.py', 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace('sx_batch_node.py', 'sx_conf.json')
+    if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
+        conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
         return load_json(conf_path)
     else:
         return {}
@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
     args = get_args()
 
-    script_path = str(os.path.realpath(__file__)).replace('sx_batch_node.py', 'sx_batch.py')
+    script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
     blender_path = str(args.blenderpath)
     task_list = args.remotetask
     folder = str(args.folder)

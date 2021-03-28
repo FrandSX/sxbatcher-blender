@@ -46,7 +46,6 @@ if (args.palette is not None):
     else:
         print('SX Batch: Invalid palette name!')
 
-
 if args.staticvertexcolors is not None:
     for obj in bpy.context.view_layer.objects.selected:
         if 'sxtools' in obj.keys():

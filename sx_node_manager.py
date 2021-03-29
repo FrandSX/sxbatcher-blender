@@ -65,6 +65,10 @@ def init_globals():
     if sxglobals.catalogue_path is None:
         print('SX Node Manager: No Catalogue specified')
 
+    costs_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_costs.json')
+    if os.path.isfile(costs_path):
+        sxglobals.source_costs = load_json(costs_path)
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -165,8 +169,17 @@ def get_source_files():
     return source_files
 
 
-def sort_by_cost():
-    pass
+def sort_by_cost(source_files, cost_dict):
+    cost_list = list(cost_dict.items())
+    cost_list.sort(key = lambda x: x[1])
+
+    sorted_source = []
+    for cost in cost_list:
+        for file in source_files:
+            if cost[0] in file:
+                sorted_source.append(file)
+
+    return sorted_source
 
 
 def sx_init_batch(done, tasknodes, sourcelocks, nodes, sourcefiles, sourcecosts, subdiv, pal, stat):
@@ -212,8 +225,8 @@ def sx_batch(i):
         work_amount = int(job_length * (numcores / float(total_cores)))
         if work_amount < numcores:
             work_amount = numcores
-        if job_length - (processed.value + work_amount) == 1:
-            work_amount += 1
+        if job_length - (processed.value + work_amount) <= 3:
+            work_amount += (job_length - (processed.value + work_amount))
         batch_files = sxglobals.source_files[processed.value:(processed.value + work_amount)]
         processed.value = processed.value + work_amount
 
@@ -275,7 +288,8 @@ if __name__ == '__main__':
     init_globals()
     sxglobals.source_files = get_source_files()
     if sxglobals.source_costs is not None:
-        sort_by_cost()
+        files_by_cost = sort_by_cost(sxglobals.source_files, sxglobals.source_costs)
+        sxglobals.source_files = files_by_cost[::-1]
     sxglobals.nodes = get_nodes()
 
     if sxglobals.listonly and len(sxglobals.source_files) > 0:

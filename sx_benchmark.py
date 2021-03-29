@@ -66,6 +66,16 @@ def load_json(file_path):
         return {}
 
 
+def save_json(data):
+    file_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_costs.json')
+    with open(file_path, 'w') as output:
+        temp_dict = {}
+        temp_dict = data
+        json.dump(temp_dict, output, indent=4)
+
+        output.close()
+
+
 def load_conf():
     if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
         conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
@@ -96,6 +106,7 @@ def sx_process(i):
     sxtools_path = tasks[i][4]
 
     batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
+    print('ba:', batch_args)
 
     if export_path is not None:
         batch_args.extend(["-x", export_path])
@@ -127,7 +138,7 @@ if __name__ == '__main__':
 
     args = get_args()
 
-    script_path = str(os.path.realpath(__file__)).replace('sx_batch_node_benchmark.py', 'sx_batch.py')
+    script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
     blender_path = str(args.blenderpath)
     catalogue_path = str(args.open)
     if args.open is not None:
@@ -169,13 +180,16 @@ if __name__ == '__main__':
 
             then = time.time()
 
-            with Pool(processes=32, initializer=sx_init, initargs=(results, tasks), maxtasksperchild=1) as pool:
+            with Pool(processes=4, initializer=sx_init, initargs=(results, tasks), maxtasksperchild=1) as pool:
                 pool.map(sx_process, range(N))
 
             now = time.time()
 
+            costs = {}
             times = results[:]
             for i, file in enumerate(source_files):
+                costs[os.path.basename(file)] = times[i]
                 print(file, times[i])
 
             print(nodename + ':', len(source_files), 'full Catalogue export in', round(now-then, 2), 'seconds\n')
+            save_json(costs)

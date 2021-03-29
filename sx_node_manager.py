@@ -65,7 +65,7 @@ def init_globals():
     if sxglobals.catalogue_path is None:
         print('SX Node Manager: No Catalogue specified')
 
-    costs_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_costs.json')
+    costs_path = sxglobals.catalogue_path.replace(os.path.basename(sxglobals.catalogue_path), 'sx_costs.json')
     if os.path.isfile(costs_path):
         sxglobals.source_costs = load_json(costs_path)
 
@@ -309,7 +309,10 @@ if __name__ == '__main__':
             processed = multiprocessing.Value('i', 0)
 
             then = time.time()
-            print('\n'+'SX Node Manager: Assigning Tasks')
+            if sxglobals.source_costs is not None:
+                print('\n'+'SX Node Manager: Assigning Tasks (Cost optimized)')
+            else:
+                print('\n'+'SX Node Manager: Assigning Tasks')
 
             with Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, source_lock_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:
                 batch_pool.map(sx_batch, range(len(sxglobals.nodes)))

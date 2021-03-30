@@ -1,6 +1,5 @@
 import argparse
 import subprocess
-import codecs
 import multiprocessing
 import time
 import json
@@ -120,15 +119,15 @@ def sx_process(process_args):
     if staticvertexcolors:
         batch_args.extend(["-st"])
 
-    # Primary method: spawns quiet workers
-    with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
-        try:
-            subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as error:
-            print('SX Batch Error:', source_file)
-
-    # Comment above and uncomment below for for debugging (also add "-d" to batch args)
-    # subprocess.run(batch_args)
+    try:
+        p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
+        # For debugging add "-d" to batch args and remove the keyword filter
+        lines = p.stdout.splitlines()
+        for line in lines:
+            if 'Error' in line:
+                print(line)
+    except subprocess.CalledProcessError as error:
+        print('SX Batch Error:', source_file)
 
 
 # ------------------------------------------------------------------------

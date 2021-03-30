@@ -51,9 +51,9 @@ if args.staticvertexcolors is not None:
         if 'sxtools' in obj.keys():
             obj['staticVertexColors'] = bool(args.staticvertexcolors)
 
-for obj in bpy.context.view_layer.objects.selected:
-    if 'sxtools' in obj.keys():
-        obj.sxtools.decimation = 0
+# for obj in bpy.context.view_layer.objects.selected:
+#     if 'sxtools' in obj.keys():
+#         obj.sxtools.decimation = 0
 
 bpy.ops.sxtools.macro('EXEC_DEFAULT')
 bpy.ops.sxtools.exportfiles('EXEC_DEFAULT')

@@ -66,8 +66,7 @@ def load_json(file_path):
         return {}
 
 
-def save_json(data):
-    file_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_costs.json')
+def save_json(file_path, data):
     with open(file_path, 'w') as output:
         temp_dict = {}
         temp_dict = data
@@ -104,9 +103,7 @@ def sx_process(i):
     script_path = tasks[i][2]
     export_path = tasks[i][3]
     sxtools_path = tasks[i][4]
-
     batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
-    print('ba:', batch_args)
 
     if export_path is not None:
         batch_args.extend(["-x", export_path])
@@ -116,14 +113,17 @@ def sx_process(i):
 
     # Primary method: spawns quiet workers
     then = time.time()
-    with codecs.open(os.devnull, 'wb', encoding='utf8') as devnull:
-        try:
-            subprocess.check_call(batch_args, stdout=devnull, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as error:
-            print('SX Batch Error:', source_file)
 
-    # Comment above and uncomment below for for debugging (also add "-d" to batch args)
-    # subprocess.run(batch_args)
+    try:
+        p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
+        # For debugging add "-d" to batch args and remove the keyword filter
+        lines = p.stdout.splitlines()
+        for line in lines:
+            if 'Error' in line:
+                print(line)
+    except subprocess.CalledProcessError as error:
+        print('SX Benchmark Error:', source_file)
+
     now = time.time()
     results[i] = round(now-then, 2)
 
@@ -176,11 +176,11 @@ if __name__ == '__main__':
 
         if len(source_files) > 0:
             N = len(tasks)
-            print(nodename + ': Spawning workers ( max', multiprocessing.cpu_count(), ')')
+            print(nodename + ': Starting Benchmark')
 
             then = time.time()
 
-            with Pool(processes=4, initializer=sx_init, initargs=(results, tasks), maxtasksperchild=1) as pool:
+            with Pool(processes=1, initializer=sx_init, initargs=(results, tasks), maxtasksperchild=1) as pool:
                 pool.map(sx_process, range(N))
 
             now = time.time()
@@ -192,4 +192,5 @@ if __name__ == '__main__':
                 print(file, times[i])
 
             print(nodename + ':', len(source_files), 'full Catalogue export in', round(now-then, 2), 'seconds\n')
-            save_json(costs)
+            file_path = os.path.join(asset_path, 'sx_costs.json')
+            save_json(file_path, costs)

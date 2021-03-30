@@ -102,7 +102,7 @@ def sx_process(process_args):
     palette = process_args[6]
     staticvertexcolors = process_args[7]
 
-    batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
+    batch_args = [blender_path, "--background", "--factory-startup", "--threads", "1", "-noaudio", source_file, "--python", script_path, "--"]
 
     if export_path is not None:
         batch_args.extend(["-x", export_path])
@@ -236,7 +236,7 @@ if __name__ == '__main__':
             then = time.time()
             print(nodename + ': Spawning workers ( max', num_cores, ')')
 
-            with Pool(processes=num_cores) as pool:
+            with Pool(processes=num_cores, maxtasksperchild=1) as pool:
                 pool.map(sx_process, tasks)
 
             now = time.time()

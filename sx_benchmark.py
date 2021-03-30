@@ -103,7 +103,7 @@ def sx_process(i):
     script_path = tasks[i][2]
     export_path = tasks[i][3]
     sxtools_path = tasks[i][4]
-    batch_args = [blender_path, "-b", "--factory-startup", "-noaudio", source_file, "-P", script_path, "--"]
+    batch_args = [blender_path, "-b", "--factory-startup", "-t", "1", "-noaudio", source_file, "-P", script_path, "--"]
 
     if export_path is not None:
         batch_args.extend(["-x", export_path])

@@ -214,17 +214,33 @@ def sx_update(i):
 
 
 def sx_batch(i):
+    def lerp(value_a, value_b, factor):
+        return value_a * (1 - factor) + value_b * factor
+
     total_cores = 0
     for node in sxglobals.nodes:
         total_cores += int(node['numcores'])
+
+    cost_list = list(sxglobals.source_costs.items())
+    cost_list.sort(key = lambda x: x[1])
+
+    min_cost = cost_list[0][1]
+    max_cost = cost_list[-1][1]
+
+    load_balance_ratio = min_cost / max_cost
+    # print('Min cost:', min_cost, 'Max cost:', max_cost, 'Ratio:', load_balance_ratio)
+    if load_balance_ratio < 0.4:
+        load_balance_ratio = 0.4
+
+    node_load_value = lerp(load_balance_ratio, (1/load_balance_ratio), (i / float(len(sxglobals.nodes))))
 
     job_length = len(sxglobals.source_files)
     if processed.value < job_length:
         node = sxglobals.nodes[i]
         numcores = int(node['numcores'])
-        work_amount = int(job_length * (numcores / float(total_cores)))
-        if work_amount < numcores:
-            work_amount = numcores
+        work_amount = int(job_length * node_load_value * (numcores / float(total_cores)))
+        # if work_amount < numcores:
+        #     work_amount = numcores
         if job_length - (processed.value + work_amount) <= 3:
             work_amount += (job_length - (processed.value + work_amount))
         batch_files = sxglobals.source_files[processed.value:(processed.value + work_amount)]

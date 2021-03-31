@@ -27,7 +27,7 @@ nodename = 'SX Batch Node '+ip_addr
 
 
 def get_args():
-    conf = load_conf()
+    conf = load_json(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json'))
     blender_path = conf.get('blender_path')
     catalogue_path = conf.get('catalogue_path')
     export_path = conf.get('export_path')
@@ -47,6 +47,7 @@ def get_args():
     parser.add_argument('-o', '--open', default=catalogue_path, help='Open a Catalogue file')
     parser.add_argument('-s', '--sxtools', default=sxtools_path, help='SX Tools folder')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Export path')
+    parser.add_argument('-p', '--partialrefresh', action='store_true', help='Benchmark only new assets')
     all_arguments, ignored = parser.parse_known_args()
     return all_arguments
 
@@ -59,10 +60,10 @@ def load_json(file_path):
             input.close()
         return temp_dict
     except ValueError:
-        print(nodename + ' Error: Invalid JSON file.')
+        print('SX Node Manager: Invalid file', file_path)
         return {}
     except IOError:
-        print(nodename + ' Error: File not found!')
+        print('SX Node Manager: File not found', file_path)
         return {}
 
 
@@ -73,22 +74,6 @@ def save_json(file_path, data):
         json.dump(temp_dict, output, indent=4)
 
         output.close()
-
-
-def load_conf():
-    if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
-        conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
-        return load_json(conf_path)
-    else:
-        return {}
-
-
-def load_asset_data(catalogue_path):
-    if os.path.isfile(catalogue_path):
-        return load_json(catalogue_path)
-    else:
-        print(nodename + ': Invalid Catalogue path')
-        return {}
 
 
 def sx_init(result_array, task_array):
@@ -135,6 +120,7 @@ if __name__ == '__main__':
     asset_path = None
     export_path = None
     sxtools_path = None
+    cost_path = None
 
     args = get_args()
 
@@ -143,7 +129,8 @@ if __name__ == '__main__':
     catalogue_path = str(args.open)
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)
-        asset_dict = load_asset_data(catalogue_path)
+        cost_path = os.path.join(asset_path, 'sx_costs.json')
+        asset_dict = load_json(catalogue_path)
     if args.exportpath is not None:
         export_path = os.path.abspath(args.exportpath)
     else:
@@ -154,6 +141,7 @@ if __name__ == '__main__':
         print(nodename + ' Warning: SX Tools path not specified')
 
     source_files = []
+    cost_dict = load_json(cost_path)
     if args.blenderpath is None:
         print(nodename + ' Error: Blender path not specified')
     elif args.open is None:
@@ -164,6 +152,11 @@ if __name__ == '__main__':
                 for key in asset_dict[category].keys():
                     file_path = key.replace('//', os.path.sep)
                     source_files.append(os.path.join(asset_path, file_path))
+            if args.partialrefresh:
+                for cost in cost_dict.keys():
+                    filtered_sources = [file for file in source_files if not cost in file]
+                    source_files = filtered_sources[:]
+
         else:
             print(nodename + ' Error: Invalid Catalogue')
 
@@ -176,7 +169,10 @@ if __name__ == '__main__':
 
         if len(source_files) > 0:
             N = len(tasks)
-            print(nodename + ': Starting Benchmark')
+            if not args.partialrefresh:
+                print(nodename + ': Starting Benchmark')
+            else:
+                print(nodename + ': Updating costs for', len(source_files), 'files')
 
             then = time.time()
 
@@ -185,12 +181,10 @@ if __name__ == '__main__':
 
             now = time.time()
 
-            costs = {}
             times = results[:]
             for i, file in enumerate(source_files):
-                costs[os.path.basename(file)] = times[i]
+                cost_dict[os.path.basename(file)] = times[i]
                 print(file, times[i])
 
             print(nodename + ':', len(source_files), 'full Catalogue export in', round(now-then, 2), 'seconds\n')
-            file_path = os.path.join(asset_path, 'sx_costs.json')
-            save_json(file_path, costs)
+            save_json(cost_path, cost_dict)

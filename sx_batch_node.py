@@ -22,7 +22,7 @@ def get_ip():
 
 
 ip_addr = get_ip()
-nodename = 'SX Batch Node '+ip_addr
+nodename = 'Node '+ip_addr
 
 
 def get_args():
@@ -221,7 +221,7 @@ if __name__ == '__main__':
         # Construct node-specific task assignment list
         if len(source_files) > 0:
             source_files = list(set(source_files))
-            print(nodename + ': Source files:')
+            print('\n' + nodename + ': Source files:')
             for file in source_files:
                 print(file)
 
@@ -234,7 +234,7 @@ if __name__ == '__main__':
             num_cores = multiprocessing.cpu_count()
 
             then = time.time()
-            print(nodename + ': Spawning workers ( max', num_cores, ')')
+            print(nodename + ': Spawning workers')
 
             with Pool(processes=num_cores, maxtasksperchild=1) as pool:
                 pool.map(sx_process, tasks)

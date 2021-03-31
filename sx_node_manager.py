@@ -120,10 +120,6 @@ def get_nodes():
 
         if len(nodes) == 0:
             print('\nSX Node Manager: No network nodes')
-        else:
-            print('\nSX Node Manager: Active Nodes')
-            for node in nodes:
-                print('Node:', node['ip'], '\tCores:', node['numcores'], '\tOS:', node['os'])
 
     return nodes
 
@@ -239,6 +235,9 @@ def sx_batch(i):
         batch_files = sxglobals.source_files[processed.value:(processed.value + work_amount)]
         processed.value = processed.value + work_amount
 
+        print('Node:', sxglobals.nodes[i]['ip'], '\tBatch Size:', len(batch_files), '\tCores:', numcores, '\tOS:', nodes['os'])
+        print('Log:', 'node'+str(i)+'_export_log.txt')
+
         if len(batch_files) > 0:
             tasked_node_array[i] = 1
             if node['os'] == 'win':
@@ -256,8 +255,8 @@ def sx_batch(i):
             if sxglobals.staticvertexcolors:
                 cmd += ' -st'
 
-            p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, capture_output=True)
-            print(p.stdout)
+            with open('node'+str(i)+'_export_log.txt', 'ab') as out:
+                p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
 
 
 def sx_cost_batch(i):
@@ -298,7 +297,7 @@ def sx_cost_batch(i):
         batch_dict[j] = batch_files[:]
         work_shares[j] = work_share
 
-    print('Total Job Cost:', round(total_cost, 1), 'Work Share:', round(work_shares[i], 1), 'Batch Size:', len(batch_dict[i]))
+    print('Node:', '(' + sxglobals.nodes[i]['os'] + ')', sxglobals.nodes[i]['ip'], '\tWork Share:', str(round((work_shares[i] / total_cost) * 100, 0))+'%', '(' + str(len(batch_dict[i])) +' files)', '\tCores:', sxglobals.nodes[i]['numcores'], '\tLog:', 'node'+str(i)+'_export_log.txt')
 
     node = sxglobals.nodes[i]
     if len(batch_dict[i]) > 0:
@@ -318,8 +317,8 @@ def sx_cost_batch(i):
         if sxglobals.staticvertexcolors:
             cmd += ' -st'
 
-        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, capture_output=True)
-        print(p.stdout)
+        with open('node'+str(i)+'_export_log.txt', 'ab') as out:
+            p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
 
 
 def sx_collect(i):
@@ -383,10 +382,10 @@ if __name__ == '__main__':
 
             # 2) Process file batches
             if sxglobals.source_costs is not None:
-                print('\n'+'SX Node Manager: Assigning Tasks (Cost optimized)')
+                print('\n'+'SX Node Manager: Assigning Tasks (cost-based method)')
                 task_type = sx_cost_batch
             else:
-                print('\n'+'SX Node Manager: Assigning Tasks')
+                print('\n'+'SX Node Manager: Assigning Tasks (default method)')
                 task_type = sx_batch
 
             with Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:

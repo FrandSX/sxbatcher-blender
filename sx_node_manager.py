@@ -212,6 +212,16 @@ def sx_update(i):
     print(p.stdout)
 
 
+def sx_setup(i):
+    node = sxglobals.nodes[i]
+    if node['os'] == 'win':
+        cmd = 'mkdir %userprofile%\sx_batch_temp'
+    else:
+        cmd = 'mkdir -p ~/sx_batch_temp'
+
+    p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], capture_output=True)
+
+
 def sx_batch(i):
     total_cores = 0
     for node in sxglobals.nodes:
@@ -232,25 +242,22 @@ def sx_batch(i):
         if len(batch_files) > 0:
             tasked_node_array[i] = 1
             if node['os'] == 'win':
-                cmd0 = 'mkdir %userprofile%\sx_batch_temp'
-                cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
-                cmd1 += ' -e %userprofile%\sx_batch_temp -r'
+                cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+                cmd += ' -e %userprofile%\sx_batch_temp -r'
             else:
-                cmd0 = 'mkdir -p ~/sx_batch_temp'
-                cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
-                cmd1 += ' -e ~/sx_batch_temp/ -r'
+                cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+                cmd += ' -e ~/sx_batch_temp/ -r'
             for file in batch_files:
-                cmd1 += ' '+file
+                cmd += ' '+file
             if sxglobals.subdivision is not None:
-                cmd1 += ' -sd '+sxglobals.subdivision
+                cmd += ' -sd '+sxglobals.subdivision
             if sxglobals.palette is not None:
-                cmd1 += ' -sp '+sxglobals.palette
+                cmd += ' -sp '+sxglobals.palette
             if sxglobals.staticvertexcolors:
-                cmd1 += ' -st'
+                cmd += ' -st'
 
-        p0 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd0], capture_output=True)
-        p1 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd1], text=True, capture_output=True)
-        print(p1.stdout)
+            p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, capture_output=True)
+            print(p.stdout)
 
 
 def sx_cost_batch(i):
@@ -297,25 +304,22 @@ def sx_cost_batch(i):
     if len(batch_dict[i]) > 0:
         tasked_node_array[i] = 1
         if node['os'] == 'win':
-            cmd0 = 'mkdir %userprofile%\sx_batch_temp'
-            cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
-            cmd1 += ' -e %userprofile%\sx_batch_temp -r'
+            cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+            cmd += ' -e %userprofile%\sx_batch_temp -r'
         else:
-            cmd0 = 'mkdir -p ~/sx_batch_temp'
-            cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
-            cmd1 += ' -e ~/sx_batch_temp/ -r'
+            cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+            cmd += ' -e ~/sx_batch_temp/ -r'
         for file in batch_dict[i]:
-            cmd1 += ' '+file
+            cmd += ' '+file
         if sxglobals.subdivision is not None:
-            cmd1 += ' -sd '+sxglobals.subdivision
+            cmd += ' -sd '+sxglobals.subdivision
         if sxglobals.palette is not None:
-            cmd1 += ' -sp '+sxglobals.palette
+            cmd += ' -sp '+sxglobals.palette
         if sxglobals.staticvertexcolors:
-            cmd1 += ' -st'
+            cmd += ' -st'
 
-    p0 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd0], capture_output=True)
-    p1 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd1], text=True, capture_output=True)
-    print(p1.stdout)
+        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, capture_output=True)
+        print(p.stdout)
 
 
 def sx_collect(i):
@@ -372,6 +376,12 @@ if __name__ == '__main__':
             processed = multiprocessing.Value('i', 0)
 
             then = time.time()
+
+            # 1) Create temp folders
+            with Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.nodes, None), maxtasksperchild=1) as setup_pool:
+                setup_pool.map(sx_setup, range(len(sxglobals.nodes)))
+
+            # 2) Process file batches
             if sxglobals.source_costs is not None:
                 print('\n'+'SX Node Manager: Assigning Tasks (Cost optimized)')
                 task_type = sx_cost_batch
@@ -382,7 +392,7 @@ if __name__ == '__main__':
             with Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:
                 batch_pool.map(task_type, range(len(sxglobals.nodes)))
 
-            # Only collect and clean up nodes that have been tasked
+            # 3) Only collect from nodes that have been tasked
             sxglobals.tasked_nodes = []
             for i, node in enumerate(sxglobals.nodes):
                 if tasked_node_array[i] == 1:
@@ -391,8 +401,9 @@ if __name__ == '__main__':
             with Pool(processes=len(sxglobals.tasked_nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, sxglobals.export_path), maxtasksperchild=1) as collect_pool:
                 collect_pool.map(sx_collect, range(len(sxglobals.tasked_nodes)))
 
-            with Pool(processes=len(sxglobals.tasked_nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, None), maxtasksperchild=1) as cleanup_pool:
-                cleanup_pool.map(sx_cleanup, range(len(sxglobals.tasked_nodes)))
+            # 4) Clean up nodes
+            with Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, None), maxtasksperchild=1) as cleanup_pool:
+                cleanup_pool.map(sx_cleanup, range(len(sxglobals.nodes)))
 
             now = time.time()
             print('SX Node Manager: Export Finished!')

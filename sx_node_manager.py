@@ -182,11 +182,10 @@ def sort_by_cost(source_files, cost_dict):
     return sorted_source
 
 
-def sx_init_batch(done, tasknodes, sourcelocks, nodes, sourcefiles, sourcecosts, subdiv, pal, stat):
-    global processed, source_lock_array, tasked_node_array
+def sx_init_batch(done, tasknodes, nodes, sourcefiles, sourcecosts, subdiv, pal, stat):
+    global processed, tasked_node_array
     processed = done
     tasked_node_array = tasknodes
-    source_lock_array = sourcelocks
     sxglobals.nodes = nodes
     sxglobals.source_files = sourcefiles
     sxglobals.source_costs = sourcecosts
@@ -214,33 +213,17 @@ def sx_update(i):
 
 
 def sx_batch(i):
-    def lerp(value_a, value_b, factor):
-        return value_a * (1 - factor) + value_b * factor
-
     total_cores = 0
     for node in sxglobals.nodes:
         total_cores += int(node['numcores'])
-
-    cost_list = list(sxglobals.source_costs.items())
-    cost_list.sort(key = lambda x: x[1])
-
-    min_cost = cost_list[0][1]
-    max_cost = cost_list[-1][1]
-
-    load_balance_ratio = min_cost / max_cost
-    # print('Min cost:', min_cost, 'Max cost:', max_cost, 'Ratio:', load_balance_ratio)
-    if load_balance_ratio < 0.4:
-        load_balance_ratio = 0.4
-
-    node_load_value = lerp(load_balance_ratio, (1/load_balance_ratio), (i / float(len(sxglobals.nodes))))
 
     job_length = len(sxglobals.source_files)
     if processed.value < job_length:
         node = sxglobals.nodes[i]
         numcores = int(node['numcores'])
-        work_amount = int(job_length * node_load_value * (numcores / float(total_cores)))
-        # if work_amount < numcores:
-        #     work_amount = numcores
+        work_amount = int(job_length * (numcores / float(total_cores)))
+        if work_amount < numcores:
+            work_amount = numcores
         if job_length - (processed.value + work_amount) <= 3:
             work_amount += (job_length - (processed.value + work_amount))
         batch_files = sxglobals.source_files[processed.value:(processed.value + work_amount)]
@@ -268,6 +251,71 @@ def sx_batch(i):
         p0 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd0], capture_output=True)
         p1 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd1], text=True, capture_output=True)
         print(p1.stdout)
+
+
+def sx_cost_batch(i):
+    # Examine job costs
+    total_cores = 0
+    for node in sxglobals.nodes:
+        total_cores += int(node['numcores'])
+
+    cost_list = list(sxglobals.source_costs.items())
+    cost_list.sort(key = lambda x: x[1])
+    cost_list.reverse()
+
+    total_cost = 0
+    for cost in cost_list:
+        total_cost += cost[1]
+
+    # Allocate (and adjust) work share bias
+    batch_dict = {}
+    work_shares = [0] * len(sxglobals.nodes)
+    start = 0
+    for j, batch_node in enumerate(sxglobals.nodes):
+        batch_files = []
+        numcores = int(batch_node['numcores'])
+        bias = 0
+        work_load = 0
+        work_share = total_cost * ((float(numcores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+
+        for k in range(start, len(sxglobals.source_files)):
+            if (work_load + cost_list[k][1]) < work_share:
+                batch_files.append(sxglobals.source_files[k])
+                work_load += cost_list[k][1]
+                start += 1
+            elif j+1 == len(sxglobals.nodes):
+                batch_files.append(sxglobals.source_files[k])
+                work_load += cost_list[k][1]
+                start += 1
+
+        batch_dict[j] = batch_files[:]
+        work_shares[j] = work_share
+
+    print('Total Job Cost:', round(total_cost, 1), 'Work Share:', round(work_shares[i], 1), 'Batch Size:', len(batch_dict[i]))
+
+    node = sxglobals.nodes[i]
+    if len(batch_dict[i]) > 0:
+        tasked_node_array[i] = 1
+        if node['os'] == 'win':
+            cmd0 = 'mkdir %userprofile%\sx_batch_temp'
+            cmd1 = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+            cmd1 += ' -e %userprofile%\sx_batch_temp -r'
+        else:
+            cmd0 = 'mkdir -p ~/sx_batch_temp'
+            cmd1 = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+            cmd1 += ' -e ~/sx_batch_temp/ -r'
+        for file in batch_dict[i]:
+            cmd1 += ' '+file
+        if sxglobals.subdivision is not None:
+            cmd1 += ' -sd '+sxglobals.subdivision
+        if sxglobals.palette is not None:
+            cmd1 += ' -sp '+sxglobals.palette
+        if sxglobals.staticvertexcolors:
+            cmd1 += ' -st'
+
+    p0 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd0], capture_output=True)
+    p1 = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd1], text=True, capture_output=True)
+    print(p1.stdout)
 
 
 def sx_collect(i):
@@ -321,17 +369,18 @@ if __name__ == '__main__':
 
         if not sxglobals.listonly and (len(sxglobals.source_files) > 0):
             tasked_node_array = multiprocessing.Array('i', [0]*len(sxglobals.nodes))
-            source_lock_array = multiprocessing.Array('i', [0]*len(sxglobals.source_files))
             processed = multiprocessing.Value('i', 0)
 
             then = time.time()
             if sxglobals.source_costs is not None:
                 print('\n'+'SX Node Manager: Assigning Tasks (Cost optimized)')
+                task_type = sx_cost_batch
             else:
                 print('\n'+'SX Node Manager: Assigning Tasks')
+                task_type = sx_batch
 
-            with Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, source_lock_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:
-                batch_pool.map(sx_batch, range(len(sxglobals.nodes)))
+            with Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:
+                batch_pool.map(task_type, range(len(sxglobals.nodes)))
 
             # Only collect and clean up nodes that have been tasked
             sxglobals.tasked_nodes = []

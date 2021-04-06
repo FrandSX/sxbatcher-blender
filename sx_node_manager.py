@@ -71,10 +71,10 @@ def init_globals():
 
     if sxglobals.catalogue_path is None:
         print('SX Node Manager: No Catalogue specified')
-
-    sxglobals.costs_path = sxglobals.catalogue_path.replace(os.path.basename(sxglobals.catalogue_path), 'sx_costs.json')
-    if os.path.isfile(sxglobals.costs_path):
-        sxglobals.source_costs = load_json(sxglobals.costs_path)
+    else:
+        sxglobals.costs_path = sxglobals.catalogue_path.replace(os.path.basename(sxglobals.catalogue_path), 'sx_costs.json')
+        if os.path.isfile(sxglobals.costs_path):
+            sxglobals.source_costs = load_json(sxglobals.costs_path)
 
     sxglobals.script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
     sxglobals.assets_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
@@ -282,7 +282,6 @@ def sx_benchmark(i):
     if sxtools_path is not None:
         batch_args.extend(["-l", sxtools_path])
 
-    # Primary method: spawns quiet workers
     then = time.time()
 
     try:
@@ -352,8 +351,11 @@ def sx_batch(node):
             if sxglobals.staticvertexcolors:
                 cmd += ' -st'
 
+            then = time.time()
             with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
                 p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
+            now = time.time()
+            print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
 
 
 def sx_cost_batch(node):
@@ -416,8 +418,11 @@ def sx_cost_batch(node):
         if sxglobals.staticvertexcolors:
             cmd += ' -st'
 
+        then = time.time()
         with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
             p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
+        now = time.time()
+        print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
 
 
 def sx_collect(node):

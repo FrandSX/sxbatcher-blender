@@ -29,6 +29,7 @@ library_path = os.path.abspath(args.librarypath) + os.path.sep
 # ------------------------------------------------------------------------
 bpy.ops.preferences.addon_enable(module="sxtools")
 bpy.context.preferences.addons['sxtools'].preferences.libraryfolder = library_path
+bpy.context.preferences.addons['sxtools'].preferences.flipsmartx = True
 bpy.data.scenes["Scene"].sxtools.exportfolder = export_path
 
 bpy.ops.object.select_all(action='SELECT')

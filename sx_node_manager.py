@@ -463,7 +463,6 @@ if __name__ == '__main__':
 
     # Update or calculate asset costs if sx_costs.json is in use
     if sxglobals.benchmark:
-        print('ben')
         update_costs(force_all=True)
 
     if (sxglobals.source_costs is not None) and not sxglobals.benchmark:

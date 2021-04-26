@@ -208,7 +208,7 @@ def update_costs(force_all=False):
 
         if not force_all:
             for cost in sxglobals.source_costs.keys():
-                filtered_sources = [file for file in benchmark_files if not cost in file]
+                filtered_sources = [file for file in benchmark_files if cost != os.path.basename(file)]
                 benchmark_files = filtered_sources[:]
 
         for file in benchmark_files:
@@ -238,7 +238,7 @@ def sort_by_cost(source_files, cost_dict):
     sorted_source = []
     for cost in cost_list:
         for file in source_files:
-            if cost[0] in file:
+            if cost[0] == os.path.basename(file):
                 sorted_source.append(file)
 
     return sorted_source
@@ -359,6 +359,22 @@ def sx_batch(node):
 
 
 def sx_cost_batch(node):
+
+    def validate_lists(source_list, cost_list):
+        test_list = source_list[:]
+        for cost in cost_list:
+            for i, test in enumerate(test_list):
+                if cost[0] == os.path.basename(test):
+                    test_list[i] = ''
+                    break
+
+        for test in test_list:
+            if test != '':
+                print('SX Node Manager Error: Multiple instances in Catalogue', test)
+                return False
+        else:
+            return True
+
     # Examine job costs
     total_cores = 0
     node_idx = 0
@@ -371,58 +387,59 @@ def sx_cost_batch(node):
     cost_list.sort(key = lambda x: x[1])
     cost_list.reverse()
 
-    total_cost = 0
-    for cost in cost_list:
-        total_cost += cost[1]
+    if validate_lists(sxglobals.source_files, cost_list):
+        total_cost = 0
+        for cost in cost_list:
+            total_cost += cost[1]
 
-    # Allocate (and adjust) work share bias
-    batch_dict = {}
-    work_shares = [0] * len(sxglobals.nodes)
-    start = 0
-    for j, sx_node in enumerate(sxglobals.nodes):
-        batch_files = []
-        numcores = int(sx_node['numcores'])
-        bias = 0
-        work_load = 0
-        work_share = total_cost * ((float(numcores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+        # Allocate (and adjust) work share bias
+        batch_dict = {}
+        work_shares = [0] * len(sxglobals.nodes)
+        start = 0
+        for j, sx_node in enumerate(sxglobals.nodes):
+            batch_files = []
+            numcores = int(sx_node['numcores'])
+            bias = 0
+            work_load = 0
+            work_share = total_cost * ((float(numcores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
 
-        for k in range(start, len(sxglobals.source_files)):
-            if (work_load + cost_list[k][1]) < work_share:
-                batch_files.append(sxglobals.source_files[k])
-                work_load += cost_list[k][1]
-                start += 1
-            elif j+1 == len(sxglobals.nodes):
-                batch_files.append(sxglobals.source_files[k])
-                work_load += cost_list[k][1]
-                start += 1
+            for k in range(start, len(sxglobals.source_files)):
+                if (work_load + cost_list[k][1]) < work_share:
+                    batch_files.append(sxglobals.source_files[k])
+                    work_load += cost_list[k][1]
+                    start += 1
+                elif j+1 == len(sxglobals.nodes):
+                    batch_files.append(sxglobals.source_files[k])
+                    work_load += cost_list[k][1]
+                    start += 1
 
-        batch_dict[j] = batch_files[:]
-        work_shares[j] = work_share
+            batch_dict[j] = batch_files[:]
+            work_shares[j] = work_share
 
-    print('NodeID:', node_idx, '(' + node['os'] + ')', node['ip'], '\tWork Share:', str(round((work_shares[node_idx] / total_cost) * 100, 0))+'%', '(' + str(len(batch_dict[node_idx])) + ' files)', '\tCores:', node['numcores'], '\tLog:', 'sx_export_log_' + node['ip'].replace('.', '') + '.txt')
+        print('NodeID:', node_idx, '(' + node['os'] + ')', node['ip'], '\tWork Share:', str(round((work_shares[node_idx] / total_cost) * 100, 0))+'%', '(' + str(len(batch_dict[node_idx])) + ' files)', '\tCores:', node['numcores'], '\tLog:', 'sx_export_log_' + node['ip'].replace('.', '') + '.txt')
 
-    if len(batch_dict[node_idx]) > 0:
-        tasked_node_array[node_idx] = 1
-        if node['os'] == 'win':
-            cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
-            cmd += ' -e %userprofile%\sx_batch_temp -r'
-        else:
-            cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
-            cmd += ' -e ~/sx_batch_temp/ -r'
-        for file in batch_dict[node_idx]:
-            cmd += ' '+file
-        if sxglobals.subdivision is not None:
-            cmd += ' -sd '+sxglobals.subdivision
-        if sxglobals.palette is not None:
-            cmd += ' -sp '+sxglobals.palette
-        if sxglobals.staticvertexcolors:
-            cmd += ' -st'
+        if len(batch_dict[node_idx]) > 0:
+            tasked_node_array[node_idx] = 1
+            if node['os'] == 'win':
+                cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+                cmd += ' -e %userprofile%\sx_batch_temp -r'
+            else:
+                cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+                cmd += ' -e ~/sx_batch_temp/ -r'
+            for file in batch_dict[node_idx]:
+                cmd += ' '+file
+            if sxglobals.subdivision is not None:
+                cmd += ' -sd '+sxglobals.subdivision
+            if sxglobals.palette is not None:
+                cmd += ' -sp '+sxglobals.palette
+            if sxglobals.staticvertexcolors:
+                cmd += ' -st'
 
-        then = time.time()
-        with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
-            p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
-        now = time.time()
-        print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
+            then = time.time()
+            with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
+                p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
+            now = time.time()
+            print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
 
 
 def sx_collect(node):

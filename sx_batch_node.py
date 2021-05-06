@@ -237,7 +237,8 @@ if __name__ == '__main__':
             print(nodename + ': Spawning workers')
 
             with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-                pool.map(sx_process, tasks)
+                for i, _ in enumerate(pool.imap(sx_process, tasks)):
+                    print(nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
 
             now = time.time()
             print(nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')

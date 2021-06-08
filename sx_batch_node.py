@@ -56,6 +56,7 @@ def get_args():
     parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
     parser.add_argument('-e', '--exportpath', default=export_path, help='Export path')
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Display debug messages')
     parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
     all_arguments, ignored = parser.parse_known_args()
     return all_arguments
@@ -101,8 +102,14 @@ def sx_process(process_args):
     subdivision = process_args[5]
     palette = process_args[6]
     staticvertexcolors = process_args[7]
+    debug = process_args[8]
 
-    batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path, "--"]
+    batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path]
+
+    if debug:
+        batch_args.extend(["-d"])
+
+    batch_args.extend(["--"])
 
     if export_path is not None:
         batch_args.extend(["-x", export_path])
@@ -124,8 +131,11 @@ def sx_process(process_args):
         # For debugging add "-d" to batch args and remove the keyword filter
         lines = p.stdout.splitlines()
         for line in lines:
-            if 'Error' in line:
+            if debug:
                 print(line)
+            else:
+                if 'Error' in line:
+                    print(line)
     except subprocess.CalledProcessError as error:
         print('SX Batch Error:', source_file)
 
@@ -157,6 +167,7 @@ if __name__ == '__main__':
     else:
         palette = None
     staticvertexcolors = args.staticvertexcolors
+    debug = args.verbose
     catalogue_path = str(args.open)
     if args.open is not None:
         asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)
@@ -228,7 +239,7 @@ if __name__ == '__main__':
         # Generate task definition for each headless Blender
         tasks = []
         for file in source_files:
-            tasks.append((blender_path, file, script_path, export_path, sxtools_path, subdivision, palette, staticvertexcolors))
+            tasks.append((blender_path, file, script_path, export_path, sxtools_path, subdivision, palette, staticvertexcolors, debug))
 
         if not args.listonly and (len(source_files) != 0):
             num_cores = multiprocessing.cpu_count()

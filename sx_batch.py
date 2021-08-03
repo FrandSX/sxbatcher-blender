@@ -57,6 +57,18 @@ if args.staticvertexcolors is not None:
 #         obj.sxtools.decimation = 0
 
 bpy.ops.sxtools.macro('EXEC_DEFAULT')
+
+# Disable mesh poly count optimizations
+for obj in bpy.context.view_layer.objects.selected:
+    if 'sxWeld' in obj.modifiers.keys():
+        obj.modifiers['sxWeld'].show_viewport = False
+
+    if 'sxDecimate' in obj.modifiers.keys():
+            obj.modifiers['sxDecimate'].show_viewport = False
+
+    if 'sxDecimate2' in obj.modifiers.keys():
+            obj.modifiers['sxDecimate2'].show_viewport = False
+
 bpy.ops.sxtools.exportfiles('EXEC_DEFAULT')
 
 bpy.ops.wm.quit_blender('EXEC_DEFAULT')

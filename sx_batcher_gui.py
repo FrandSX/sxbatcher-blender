@@ -1,13 +1,14 @@
 import subprocess
 import multiprocessing
 import time
+import random
 import json
 import socket
 import shutil
 from multiprocessing import Pool
 import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import MULTIPLE, ttk
 import argparse
 
 
@@ -23,6 +24,7 @@ class SXBATCHER_globals(object):
         self.ip_addr = None
         self.nodename = None
         self.catalogue = None
+        self.category = None
 
 
     def __del__(self):
@@ -98,6 +100,15 @@ class SXBATCHER_init(object):
 
 class SXBATCHER_gui(object):
     def __init__(self):
+        self.window = None
+        self.frame_a = None
+        self.frame_b = None
+        self.frame_c = None
+        self.frame_items = None
+        self.lb_items = None
+        self.label_category = None
+        self.label_item_count = None
+
         return None
 
 
@@ -105,43 +116,81 @@ class SXBATCHER_gui(object):
         print('SX Batcher: Exiting gui')
 
 
+    def list_category(self, category, listbox):
+        lb = listbox
+        cat_length = len(sxglobals.catalogue[category])
+        item_dict = sxglobals.catalogue[category]
+        for (key, value) in item_dict.items():
+            lb.insert('end', value[0])
+
+        return lb
+
+
     def handle_click(self, event):
-        print("The button was clicked!")
+        categories = list(sxglobals.catalogue.keys())
+        sxglobals.category = random.choice(categories)
+        self.refresh_lb_items()
+        self.label_category.configure(text='Category: '+sxglobals.category)
+        self.label_item_count.configure(text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
+
+
+    def refresh_lb_items(self):
+        if self.lb_items is not None:
+            self.lb_items.delete(0, 'end')
+        else:
+            self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
+        self.lb_items = self.list_category(sxglobals.category, self.lb_items)
+
 
 
     def draw_window(self):
-        window = tk.Tk(screenName='SX Batcher')
-        window.title('SX Batcher')
-        frame_a = tk.Frame()
-        frame_b = tk.Frame()
+        self.window = tk.Tk()
+        self.window.title('SX Batcher')
+        self.frame_a = tk.Frame(bd=10)
+        self.frame_b = tk.Frame(bd=10)
+        self.frame_c = tk.Frame(bd=10)
+
+        categories = list(sxglobals.catalogue.keys())
+
+        self.label_category = tk.Label(master=self.frame_a, text='Category: '+sxglobals.category)
+        self.label_category.pack()
+
+        self.frame_items = tk.Frame(master=self.frame_a)
+        self.refresh_lb_items()
+        self.lb_items.pack(side='left', fill='both')
+        scrollbar_items = tk.Scrollbar(master=self.frame_items)
+        scrollbar_items.pack(side='right', fill='y')
+        self.lb_items.config(yscrollcommand=scrollbar_items.set)
+        scrollbar_items.config(command=self.lb_items.yview)
+        self.frame_items.pack(fill='y', expand=True)
+        self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
+        self.label_item_count.pack()
+
+
+        label_items = tk.Label(master=self.frame_b, text=categories)
+        label_items.pack()
+        label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
+        label_ip.pack()
+        entry = tk.Entry(master=self.frame_b, text='vehicles')
+        entry.pack()
 
         button = tk.Button(
-            master = frame_a,
-            text="Click me!",
+            master = self.frame_c,
+            text="Change Category",
             width=25,
             height=5,
-            bg="blue",
-            fg="yellow",
         )
         button.pack()
 
-        label = tk.Label(master=frame_b, text='Catalogue File', width=100)
-        label.pack()
-        label_items = tk.Label(master=frame_b, text=len(sxglobals.catalogue), width=100)
-        label_items.pack()
-        label_ip = tk.Label(master=frame_b, text=sxglobals.ip_addr, width=100)
-        label_ip.pack()
-        entry = tk.Entry(master=frame_b)
-        entry.pack()
+        self.frame_a.pack(side='left', fill='both')
+        self.frame_b.pack(side='left', fill='both')
+        self.frame_c.pack(side='left', fill='both')
 
-        frame_a.pack()
-        frame_b.pack()
-
-        catalogue_file = entry.get()
+        # sxglobals.category = entry.get()
 
         button.bind("<Button-1>", self.handle_click)
 
-        window.mainloop()
+        self.window.mainloop()
 
 
 class SXBATCHER_process(object):
@@ -350,4 +399,5 @@ if __name__ == '__main__':
 
     init.load_conf()
     sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+    sxglobals.category = list(sxglobals.catalogue.keys())[0]
     gui.draw_window()

@@ -123,8 +123,10 @@ class SXBATCHER_gui(object):
         lb = listbox
         cat_length = len(sxglobals.catalogue[category])
         item_dict = sxglobals.catalogue[category]
-        for (key, value) in item_dict.items():
-            lb.insert('end', value[0])
+        for (key, values) in item_dict.items():
+            for value in values:
+                if '_root' in value:
+                    lb.insert('end', value)
 
         return lb
 
@@ -239,7 +241,7 @@ class SXBATCHER_gui(object):
             *sxglobals.categories,
             command=display_selected
             )
-        dropdown.pack(expand=True)
+        dropdown.pack(side='top', anchor='nw', expand=False)
 
         # Frame B
         # self.label_category = tk.Label(master=self.frame_a, text='Category: '+sxglobals.category)
@@ -252,7 +254,8 @@ class SXBATCHER_gui(object):
         scrollbar_items.pack(side='right', fill='y')
         self.lb_items.config(yscrollcommand=scrollbar_items.set)
         scrollbar_items.config(command=self.lb_items.yview)
-        self.frame_items.pack(fill='y', expand=True)
+        self.frame_items.pack(side='top', anchor='n', fill='y', expand=True)
+
         self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
         self.label_item_count.pack()
         button_next_category = tk.Button(

@@ -217,7 +217,6 @@ class SXBATCHER_gui(object):
         self.frame_a = tk.Frame(master=tab1, bd=10)
         self.frame_b = tk.Frame(master=tab1, bd=10)
         self.frame_c = tk.Frame(master=tab1, bd=10)
-        self.frame_d = tk.Frame(master=tab1, bd=10)
 
 
         # update=lambda self, context: update_modifiers(self, context, 'xmirror')
@@ -227,7 +226,6 @@ class SXBATCHER_gui(object):
             choice = variable.get()
             sxglobals.category = choice
             self.refresh_lb_items()
-            # self.label_category.configure(text='Category: '+sxglobals.category)
             self.label_item_count.configure(text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
 
         # setting variable for Integers
@@ -243,49 +241,69 @@ class SXBATCHER_gui(object):
             )
         dropdown.pack(side='top', anchor='nw', expand=False)
 
-        # Frame B
-        # self.label_category = tk.Label(master=self.frame_a, text='Category: '+sxglobals.category)
-        # self.label_category.pack()
-
         self.frame_items = tk.Frame(master=self.frame_a)
         self.refresh_lb_items()
-        self.lb_items.pack(side='left', fill='both')
+        self.lb_items.pack(side='left', fill='both', expand=True)
         scrollbar_items = tk.Scrollbar(master=self.frame_items)
         scrollbar_items.pack(side='right', fill='y')
         self.lb_items.config(yscrollcommand=scrollbar_items.set)
         scrollbar_items.config(command=self.lb_items.yview)
-        self.frame_items.pack(side='top', anchor='n', fill='y', expand=True)
+        self.frame_items.pack(side='top', anchor='n', fill='both', expand=True)
 
         self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
         self.label_item_count.pack()
-        button_next_category = tk.Button(
+        button_clear_selection = tk.Button(
             master = self.frame_a,
-            text="Change Category",
+            text="Clear Selection",
             width=20,
             height=3,
         )
-        button_next_category.pack()
+        button_clear_selection.pack()
+
+
+        # Frame B
+        label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
+        label_ip.pack()
+        entry = tk.Entry(master=self.frame_b)
+        entry.pack()
+        button_add_catalogue = tk.Button(
+            master = self.frame_b,
+            text="Add All from Catalogue",
+            width=20,
+            height=3,
+        )
+        button_add_catalogue.pack()
+        button_add_category = tk.Button(
+            master = self.frame_b,
+            text="Add all from Category",
+            width=20,
+            height=3,
+        )
+        button_add_category.pack()
+        button_add_selected = tk.Button(
+            master = self.frame_b,
+            text="Add Selected",
+            width=20,
+            height=3,
+        )
+        button_add_selected.pack()
 
 
         # Frame C
-        label_items = tk.Label(master=self.frame_b, text=sxglobals.categories)
-        label_items.pack()
-        label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
-        label_ip.pack()
-        entry = tk.Entry(master=self.frame_b, text='vehicles')
-        entry.pack()
-
-
-        # Frame D
+        self.label_exports = tk.Label(master=self.frame_c, text='Export Files:')
+        self.label_exports.pack(side='top', anchor='nw')
         self.frame_export_items = tk.Frame(master=self.frame_c)
         self.lb_export = tk.Listbox(master=self.frame_export_items, selectmode='multiple')
         self.lb_export = self.list_category(sxglobals.category, self.lb_export)
-        self.lb_export.pack(side='left', fill='both')
+        self.lb_export.pack(side='left', fill='both', expand=True)
         scrollbar_export_items = tk.Scrollbar(master=self.frame_export_items)
         scrollbar_export_items.pack(side='right', fill='y')
         self.lb_export.config(yscrollcommand=scrollbar_export_items.set)
         scrollbar_export_items.config(command=self.lb_export.yview)
-        self.frame_export_items.pack(fill='y', expand=True)
+        self.frame_export_items.pack(fill='both', expand=True)
+
+        self.label_export_item_count = tk.Label(master=self.frame_c, text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
+        self.label_export_item_count.pack()
 
         button_export = tk.Button(
             master = self.frame_c,
@@ -295,15 +313,14 @@ class SXBATCHER_gui(object):
         )
         button_export.pack()
 
-        self.frame_a.pack(side='left', fill='both')
-        self.frame_b.pack(side='left', fill='both')
-        self.frame_c.pack(side='left', fill='both')
-        self.frame_d.pack(side='left', fill='both')
+        self.frame_a.pack(side='left', fill='both', expand=True)
+        self.frame_b.pack(side='left', fill='both', expand=True)
+        self.frame_c.pack(side='left', fill='both', expand=True)
 
         # sxglobals.category = entry.get()
 
-        button_next_category.bind("<Button-1>", self.handle_click)
-        button_export.bind("<Button-1>", self.handle_click)
+        # button_next_category.bind("<Button-1>", self.handle_click)
+        # button_export.bind("<Button-1>", self.handle_click)
 
         self.window.mainloop()
 

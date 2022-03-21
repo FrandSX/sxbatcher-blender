@@ -24,6 +24,7 @@ class SXBATCHER_globals(object):
         self.ip_addr = None
         self.nodename = None
         self.catalogue = None
+        self.categories = None
         self.category = None
 
 
@@ -129,10 +130,16 @@ class SXBATCHER_gui(object):
 
 
     def handle_click(self, event):
-        categories = list(sxglobals.catalogue.keys())
-        sxglobals.category = random.choice(categories)
+        sxglobals.category = random.choice(sxglobals.categories)
         self.refresh_lb_items()
-        self.label_category.configure(text='Category: '+sxglobals.category)
+        # self.label_category.configure(text='Category: '+sxglobals.category)
+        self.label_item_count.configure(text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
+
+
+    def handle_click_category(self, event, category):
+        sxglobals.category = category
+        self.refresh_lb_items()
+        # self.label_category.configure(text='Category: '+sxglobals.category)
         self.label_item_count.configure(text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
 
 
@@ -205,15 +212,38 @@ class SXBATCHER_gui(object):
         b2.grid(row=6,column=2)
 
         # Content frames ------------------------------------------------------
-        # Frame A
         self.frame_a = tk.Frame(master=tab1, bd=10)
         self.frame_b = tk.Frame(master=tab1, bd=10)
         self.frame_c = tk.Frame(master=tab1, bd=10)
+        self.frame_d = tk.Frame(master=tab1, bd=10)
 
-        categories = list(sxglobals.catalogue.keys())
 
-        self.label_category = tk.Label(master=self.frame_a, text='Category: '+sxglobals.category)
-        self.label_category.pack()
+        # update=lambda self, context: update_modifiers(self, context, 'xmirror')
+    
+        # Frame A
+        def display_selected(choice):
+            choice = variable.get()
+            sxglobals.category = choice
+            self.refresh_lb_items()
+            # self.label_category.configure(text='Category: '+sxglobals.category)
+            self.label_item_count.configure(text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
+
+        # setting variable for Integers
+        variable = tk.StringVar()
+        variable.set(sxglobals.category)
+
+        # creating widget
+        dropdown = tk.OptionMenu(
+            self.frame_a,
+            variable,
+            *sxglobals.categories,
+            command=display_selected
+            )
+        dropdown.pack(expand=True)
+
+        # Frame B
+        # self.label_category = tk.Label(master=self.frame_a, text='Category: '+sxglobals.category)
+        # self.label_category.pack()
 
         self.frame_items = tk.Frame(master=self.frame_a)
         self.refresh_lb_items()
@@ -233,15 +263,17 @@ class SXBATCHER_gui(object):
         )
         button_next_category.pack()
 
-        # Frame B
-        label_items = tk.Label(master=self.frame_b, text=categories)
+
+        # Frame C
+        label_items = tk.Label(master=self.frame_b, text=sxglobals.categories)
         label_items.pack()
         label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
         label_ip.pack()
         entry = tk.Entry(master=self.frame_b, text='vehicles')
         entry.pack()
 
-        # Frame C
+
+        # Frame D
         self.frame_export_items = tk.Frame(master=self.frame_c)
         self.lb_export = tk.Listbox(master=self.frame_export_items, selectmode='multiple')
         self.lb_export = self.list_category(sxglobals.category, self.lb_export)
@@ -263,6 +295,7 @@ class SXBATCHER_gui(object):
         self.frame_a.pack(side='left', fill='both')
         self.frame_b.pack(side='left', fill='both')
         self.frame_c.pack(side='left', fill='both')
+        self.frame_d.pack(side='left', fill='both')
 
         # sxglobals.category = entry.get()
 
@@ -477,5 +510,6 @@ if __name__ == '__main__':
 
     init.load_conf()
     sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-    sxglobals.category = list(sxglobals.catalogue.keys())[0]
+    sxglobals.categories = list(sxglobals.catalogue.keys())
+    sxglobals.category = sxglobals.categories[0]
     gui.draw_window()

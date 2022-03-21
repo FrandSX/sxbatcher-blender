@@ -101,11 +101,13 @@ class SXBATCHER_init(object):
 class SXBATCHER_gui(object):
     def __init__(self):
         self.window = None
+        self.tabs = None
         self.frame_a = None
         self.frame_b = None
         self.frame_c = None
         self.frame_items = None
         self.lb_items = None
+        self.lb_export = None
         self.label_category = None
         self.label_item_count = None
 
@@ -142,13 +144,71 @@ class SXBATCHER_gui(object):
         self.lb_items = self.list_category(sxglobals.category, self.lb_items)
 
 
-
     def draw_window(self):
+        def temp_test():
+            pass
+
         self.window = tk.Tk()
         self.window.title('SX Batcher')
-        self.frame_a = tk.Frame(bd=10)
-        self.frame_b = tk.Frame(bd=10)
-        self.frame_c = tk.Frame(bd=10)
+
+        # Top menu bar --------------------------------------------------------
+        # menubar = tk.Menu(self.window)
+
+        # menu_file = tk.Menu(menubar, tearoff=0)
+
+        # menubar.add_cascade(label="File", menu=menu_file)
+
+        # menu_file.add_command(label="Open Catalogue", command=temp_test())
+        # menu_file.add_command(label="Settings", command=temp_test())
+        # menu_file.add_command(label="Quit", command=self.window.quit)  
+ 
+        # self.window.config(menu=menubar)
+
+        # Top tabs ------------------------------------------------------------
+        self.tabs = ttk.Notebook(self.window)
+        tab1 = ttk.Frame(self.tabs)
+        tab2 = ttk.Frame(self.tabs)
+
+        self.tabs.add(tab1, text ='Catalogue')
+        self.tabs.add(tab2, text ='Settings') 
+        self.tabs.pack(expand = 1, fill ="both")
+
+        l1 = tk.Label(tab2, text='Blender Path:', width=20)
+        l1.grid(row=1, column=1)
+        l2 = tk.Label(tab2, text='Catalogue Path:', width=20)
+        l2.grid(row=2, column=1)
+        l3 = tk.Label(tab2, text='Export Path:', width=20)
+        l3.grid(row=3, column=1)
+        l4 = tk.Label(tab2, text='SX Tools Path:', width=20)
+        l4.grid(row=4, column=1)
+
+        e1_str=tk.StringVar(self.window)
+        e2_str=tk.StringVar(self.window)
+        e3_str=tk.StringVar(self.window)
+        e4_str=tk.StringVar(self.window)
+
+        e1 = tk.Entry(tab2, textvariable=e1_str, width=60)
+        e1.grid(row=1, column=2)
+        e2 = tk.Entry(tab2, textvariable=e2_str, width=60)
+        e2.grid(row=2, column=2)
+        e3 = tk.Entry(tab2, textvariable=e3_str, width=60)
+        e3.grid(row=3, column=2)
+        e4 = tk.Entry(tab2, textvariable=e4_str, width=60)
+        e4.grid(row=4, column=2)
+
+        e1_str.set(sxglobals.blender_path)
+        e2_str.set(sxglobals.catalogue_path)
+        e3_str.set(sxglobals.export_path)
+        e4_str.set(sxglobals.sxtools_path)
+
+        b2 = tk.Button(tab2, text='Save')
+        b2.grid(row=6,column=2)
+
+        # Content frames ------------------------------------------------------
+        # Frame A
+        self.frame_a = tk.Frame(master=tab1, bd=10)
+        self.frame_b = tk.Frame(master=tab1, bd=10)
+        self.frame_c = tk.Frame(master=tab1, bd=10)
 
         categories = list(sxglobals.catalogue.keys())
 
@@ -165,8 +225,15 @@ class SXBATCHER_gui(object):
         self.frame_items.pack(fill='y', expand=True)
         self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(len(sxglobals.catalogue[sxglobals.category])))
         self.label_item_count.pack()
+        button_next_category = tk.Button(
+            master = self.frame_a,
+            text="Change Category",
+            width=20,
+            height=3,
+        )
+        button_next_category.pack()
 
-
+        # Frame B
         label_items = tk.Label(master=self.frame_b, text=categories)
         label_items.pack()
         label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
@@ -174,13 +241,24 @@ class SXBATCHER_gui(object):
         entry = tk.Entry(master=self.frame_b, text='vehicles')
         entry.pack()
 
-        button = tk.Button(
+        # Frame C
+        self.frame_export_items = tk.Frame(master=self.frame_c)
+        self.lb_export = tk.Listbox(master=self.frame_export_items, selectmode='multiple')
+        self.lb_export = self.list_category(sxglobals.category, self.lb_export)
+        self.lb_export.pack(side='left', fill='both')
+        scrollbar_export_items = tk.Scrollbar(master=self.frame_export_items)
+        scrollbar_export_items.pack(side='right', fill='y')
+        self.lb_export.config(yscrollcommand=scrollbar_export_items.set)
+        scrollbar_export_items.config(command=self.lb_export.yview)
+        self.frame_export_items.pack(fill='y', expand=True)
+
+        button_export = tk.Button(
             master = self.frame_c,
-            text="Change Category",
-            width=25,
-            height=5,
+            text="Export Selected",
+            width=20,
+            height=3,
         )
-        button.pack()
+        button_export.pack()
 
         self.frame_a.pack(side='left', fill='both')
         self.frame_b.pack(side='left', fill='both')
@@ -188,7 +266,8 @@ class SXBATCHER_gui(object):
 
         # sxglobals.category = entry.get()
 
-        button.bind("<Button-1>", self.handle_click)
+        button_next_category.bind("<Button-1>", self.handle_click)
+        button_export.bind("<Button-1>", self.handle_click)
 
         self.window.mainloop()
 
@@ -391,7 +470,6 @@ sxglobals = SXBATCHER_globals()
 init = SXBATCHER_init()
 gui = SXBATCHER_gui()
 process = SXBATCHER_process()
-
 
 if __name__ == '__main__':
     sxglobals.ip_addr = init.get_ip()

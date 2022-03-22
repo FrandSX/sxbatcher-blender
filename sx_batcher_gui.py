@@ -135,7 +135,7 @@ class SXBATCHER_gui(object):
         self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
 
 
-    def handle_click_category(self, event, category):
+    def handle_click_change_category(self, event, category):
         sxglobals.category = category
         self.refresh_lb_items()
         self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
@@ -143,17 +143,13 @@ class SXBATCHER_gui(object):
 
     def handle_click_add_catalogue(self, event):
         self.lb_export.delete(0, 'end')
-
-        selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
-        for value in selected_item_list:
-            self.lb_export.insert('end', value)
+        for category in sxglobals.catalogue.keys():
+            self.lb_export = self.list_category(category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
 
 
     def handle_click_add_category(self, event):
-        selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
-        for value in selected_item_list:
-            self.lb_export.insert('end', value)
+        self.lb_export = self.list_category(sxglobals.category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
 
 
@@ -162,6 +158,10 @@ class SXBATCHER_gui(object):
         for value in selected_item_list:
             self.lb_export.insert('end', value)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+
+
+    def handle_click_start_batch(self, event):
+        pass
 
 
     def refresh_lb_items(self):
@@ -259,28 +259,28 @@ class SXBATCHER_gui(object):
         entry.pack()
         button_add_catalogue = tk.Button(
             master = self.frame_b,
-            text="Export Catalogue",
+            text="Add all from Catalogue",
             width=20,
             height=3,
         )
         button_add_catalogue.pack()
         button_add_category = tk.Button(
             master = self.frame_b,
-            text="Export Category",
+            text="Add all from Category",
             width=20,
             height=3,
         )
         button_add_category.pack()
         button_add_selected = tk.Button(
             master = self.frame_b,
-            text="Export Selected",
+            text="Add Selected",
             width=20,
             height=3,
         )
         button_add_selected.pack()
         button_clear_exports = tk.Button(
             master = self.frame_b,
-            text="Clear Export List",
+            text="Clear Batch List",
             width=20,
             height=3,
         )
@@ -288,7 +288,7 @@ class SXBATCHER_gui(object):
 
 
         # Frame C
-        self.label_exports = tk.Label(master=self.frame_c, text='Export Files:')
+        self.label_exports = tk.Label(master=self.frame_c, text='Batch Files:')
         self.label_exports.pack(side='top', anchor='nw')
         self.frame_export_items = tk.Frame(master=self.frame_c)
         self.lb_export = tk.Listbox(master=self.frame_export_items, selectmode='multiple')
@@ -302,13 +302,13 @@ class SXBATCHER_gui(object):
         self.label_export_item_count = tk.Label(master=self.frame_c, text='Items: 0')
         self.label_export_item_count.pack()
 
-        button_export = tk.Button(
+        button_batch = tk.Button(
             master = self.frame_c,
             text="Start Batch",
             width=20,
             height=3,
         )
-        button_export.pack()
+        button_batch.pack()
 
         self.frame_a.pack(side='left', fill='both', expand=True)
         self.frame_b.pack(side='left', fill='both', expand=True)
@@ -320,7 +320,7 @@ class SXBATCHER_gui(object):
         button_add_category.bind("<Button-1>", self.handle_click_add_category)
         button_add_selected.bind("<Button-1>", self.handle_click_add_selected)
         button_clear_exports.bind("<Button-1>", self.clear_lb_export)
-        # button_export.bind("<Button-1>", self.handle_click)
+        button_batch.bind("<Button-1>", self.handle_click_start_batch)
 
         # Settings Tab --------------------------------------------------------
         l_title1 = tk.Label(tab2, text='Paths', justify='left', anchor='w')
@@ -419,10 +419,6 @@ class SXBATCHER_gui(object):
             ('192.168.0.106','dopey','win',4)]
 
         table(tab3, data, 5, 1)
-
-
-
-
 
 
         self.window.mainloop()

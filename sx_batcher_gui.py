@@ -33,6 +33,7 @@ class SXBATCHER_globals(object):
         self.subdivision_count = None
         self.static_vertex_colors = False
         self.export_objs = None
+        self.update_repo = False
 
 
     def __del__(self):
@@ -492,27 +493,6 @@ class SXBATCHER_process(object):
         print('SX Batcher: Exiting process')
 
 
-    def get_args(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument('-o', '--open', default=sxglobals.catalogue_path, help='Open a Catalogue file')
-        parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
-        parser.add_argument('-r', '--remotetask', nargs='+', type=str, help='Process list of files (distributed mode)')
-        parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
-        parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
-        parser.add_argument('-f', '--filename', help='Export an object by filename')
-        parser.add_argument('-t', '--tag', help='Export all tagged objects')
-        parser.add_argument('-s', '--sxtools', default=sxglobals.sxtools_path, help='SX Tools folder')
-        parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
-        parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
-        parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
-        parser.add_argument('-e', '--exportpath', default=sxglobals.export_path, help='Export path')
-        parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
-        parser.add_argument('-v', '--verbose', action='store_true', help='Display debug messages')
-        parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
-        all_arguments, ignored = parser.parse_known_args()
-        return all_arguments
-
-
     def sx_batch_process(self, process_args):
         blender_path = process_args[0]
         source_file = process_args[1]
@@ -560,7 +540,6 @@ class SXBATCHER_process(object):
 
     def export_selected(self):
         asset_path = None
-        args = process.get_args()
 
         if sxglobals.subdivisions:
             subdivision = str(sxglobals.subdivision_count)
@@ -573,15 +552,14 @@ class SXBATCHER_process(object):
         staticvertexcolors = sxglobals.static_vertex_colors
         debug = sxglobals.debug
 
-        catalogue_path = str(args.open)
-        if args.open is not None:
-            asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)
-            if args.updaterepo:
+        if sxglobals.catalogue_path is not None:
+            asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+            if sxglobals.update_repo:
                 if os.name == 'nt':
                     subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', asset_path])
                 else:
                     subprocess.call(['/usr/local/bin/cm', 'update', asset_path])
-            asset_dict = init.load_asset_data(catalogue_path)
+            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
 
         # grab blender work script from the location of this script
         script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')

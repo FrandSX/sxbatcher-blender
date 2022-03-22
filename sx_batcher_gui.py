@@ -26,6 +26,8 @@ class SXBATCHER_globals(object):
         self.catalogue = None
         self.categories = None
         self.category = None
+        self.debug = False
+        self.export_objs = None
 
 
     def __del__(self):
@@ -81,14 +83,20 @@ class SXBATCHER_init(object):
             sxglobals.export_path = conf.get('export_path')
             sxglobals.sxtools_path = conf.get('sxtools_path')
 
-            if sxglobals.blender_path is not None:
-                sxglobals.blender_path = sxglobals.blender_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.blender_path.replace('//', os.path.sep)) else None
-            if sxglobals.catalogue_path is not None:
-                sxglobals.catalogue_path = sxglobals.catalogue_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.catalogue_path.replace('//', os.path.sep)) else None
-            if sxglobals.export_path is not None:
-                sxglobals.export_path = sxglobals.export_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.export_path.replace('//', os.path.sep)) else None
-            if sxglobals.sxtools_path is not None:
-                sxglobals.sxtools_path = sxglobals.sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.sxtools_path.replace('//', os.path.sep)) else None
+            self.validate_paths()
+
+
+    def validate_paths(self):
+        if sxglobals.blender_path is not None:
+            sxglobals.blender_path = sxglobals.blender_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.blender_path.replace('//', os.path.sep)) else None
+        if sxglobals.catalogue_path is not None:
+            sxglobals.catalogue_path = sxglobals.catalogue_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.catalogue_path.replace('//', os.path.sep)) else None
+        if sxglobals.export_path is not None:
+            sxglobals.export_path = sxglobals.export_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.export_path.replace('//', os.path.sep)) else None
+        if sxglobals.sxtools_path is not None:
+            sxglobals.sxtools_path = sxglobals.sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.sxtools_path.replace('//', os.path.sep)) else None
+
+        return (sxglobals.blender_path is not None) and (sxglobals.catalogue_path is not None) and (sxglobals.export_path is not None) and (sxglobals.sxtools_path is not None)
 
 
     def load_asset_data(self, catalogue_path):
@@ -111,6 +119,9 @@ class SXBATCHER_gui(object):
         self.lb_export = None
         self.label_category = None
         self.label_item_count = None
+        self.var_item_count = None
+        self.var_export_count = None
+        self.button_batch = None
 
         return None
 
@@ -146,11 +157,13 @@ class SXBATCHER_gui(object):
         for category in sxglobals.catalogue.keys():
             self.lb_export = self.list_category(category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+        self.toggle_batch_button()
 
 
     def handle_click_add_category(self, event):
         self.lb_export = self.list_category(sxglobals.category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+        self.toggle_batch_button()
 
 
     def handle_click_add_selected(self, event):
@@ -158,11 +171,15 @@ class SXBATCHER_gui(object):
         for value in selected_item_list:
             self.lb_export.insert('end', value)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+        self.toggle_batch_button()
 
 
     def handle_click_start_batch(self, event):
-        pass
-
+        sxglobals.export_objs = []
+        for i in range(self.lb_export.size()):
+            sxglobals.export_objs.append(self.lb_export.get(i))
+        print(sxglobals.export_objs)
+        process.export_selected()
 
     def refresh_lb_items(self):
         if self.lb_items is not None:
@@ -175,6 +192,14 @@ class SXBATCHER_gui(object):
     def clear_lb_export(self, event):
         self.lb_export.delete(0, 'end')
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+        self.toggle_batch_button()
+
+
+    def toggle_batch_button(self):
+        if (init.validate_paths() and (self.lb_export.size() > 0)):
+            self.button_batch['state'] = 'normal'
+        else:
+            self.button_batch['state'] = 'disabled'
 
 
     def draw_window(self):
@@ -241,7 +266,9 @@ class SXBATCHER_gui(object):
         scrollbar_items.config(command=self.lb_items.yview)
         self.frame_items.pack(side='top', anchor='n', fill='both', expand=True)
 
-        self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(self.lb_items.size()))
+        self.var_item_count = tk.IntVar()
+        self.var_item_count.set(self.lb_items.size())
+        self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(self.var_item_count.get()))
         self.label_item_count.pack()
         button_clear_selection = tk.Button(
             master = self.frame_a,
@@ -299,16 +326,19 @@ class SXBATCHER_gui(object):
         scrollbar_export_items.config(command=self.lb_export.yview)
         self.frame_export_items.pack(fill='both', expand=True)
 
-        self.label_export_item_count = tk.Label(master=self.frame_c, text='Items: 0')
+        self.var_export_count = tk.IntVar()
+        self.var_export_count.set(self.lb_export.size())
+        self.label_export_item_count = tk.Label(master=self.frame_c, text='Items: '+str(self.var_export_count.get()))
         self.label_export_item_count.pack()
 
-        button_batch = tk.Button(
+        self.button_batch = tk.Button(
             master = self.frame_c,
             text="Start Batch",
             width=20,
             height=3,
         )
-        button_batch.pack()
+        self.button_batch['state'] = 'disabled'
+        self.button_batch.pack()
 
         self.frame_a.pack(side='left', fill='both', expand=True)
         self.frame_b.pack(side='left', fill='both', expand=True)
@@ -320,7 +350,7 @@ class SXBATCHER_gui(object):
         button_add_category.bind("<Button-1>", self.handle_click_add_category)
         button_add_selected.bind("<Button-1>", self.handle_click_add_selected)
         button_clear_exports.bind("<Button-1>", self.clear_lb_export)
-        button_batch.bind("<Button-1>", self.handle_click_start_batch)
+        self.button_batch.bind("<Button-1>", self.handle_click_start_batch)
 
         # Settings Tab --------------------------------------------------------
         l_title1 = tk.Label(tab2, text='Paths', justify='left', anchor='w')
@@ -365,6 +395,7 @@ class SXBATCHER_gui(object):
         c1_bool = tk.BooleanVar(self.window)
         c2_bool = tk.BooleanVar(self.window)
         c3_bool = tk.BooleanVar(self.window)
+        c4_bool = tk.BooleanVar(self.window)
         e5_str=tk.StringVar(self.window)
         e6_int=tk.IntVar(self.window)
 
@@ -374,6 +405,8 @@ class SXBATCHER_gui(object):
         c2.grid(row=8, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
         c3.grid(row=9, column=1, sticky='w', padx=10)
+        c4 = tk.Checkbutton(tab2, text='Debug', variable=c4_bool, justify='left', anchor='w')
+        c4.grid(row=10, column=1, sticky='w', padx=10)
 
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
         e5.grid(row=7, column=2, sticky='w')
@@ -384,14 +417,14 @@ class SXBATCHER_gui(object):
         l_title3 = tk.Label(tab3, text='Distributed Processing')
         l_title3.grid(row=1, column=1, padx=10, pady=10)
 
-        c4_bool = tk.BooleanVar(self.window)
         c5_bool = tk.BooleanVar(self.window)
+        c6_bool = tk.BooleanVar(self.window)
         e7_int=tk.IntVar(self.window)
 
-        c4 = tk.Checkbutton(tab3, text='Share CPU Cores:', variable=c4_bool, justify='left', anchor='w')
-        c4.grid(row=2, column=1, sticky='w', padx=10)
-        c3 = tk.Checkbutton(tab3, text='Use Network Nodes', variable=c5_bool, justify='left', anchor='w')
-        c3.grid(row=3, column=1, sticky='w', padx=10)
+        c5 = tk.Checkbutton(tab3, text='Share CPU Cores:', variable=c5_bool, justify='left', anchor='w')
+        c5.grid(row=2, column=1, sticky='w', padx=10)
+        c6 = tk.Checkbutton(tab3, text='Use Network Nodes', variable=c6_bool, justify='left', anchor='w')
+        c6.grid(row=3, column=1, sticky='w', padx=10)
 
         e7 = tk.Entry(tab3, textvariable=e7_int, width=3, justify='left')
         e7.grid(row=2, column=2, sticky='w')
@@ -435,7 +468,6 @@ class SXBATCHER_process(object):
 
     def get_args(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument('-b', '--blenderpath', default=sxglobals.blender_path, help='Blender executable location')
         parser.add_argument('-o', '--open', default=sxglobals.catalogue_path, help='Open a Catalogue file')
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
         parser.add_argument('-r', '--remotetask', nargs='+', type=str, help='Process list of files (distributed mode)')
@@ -455,7 +487,7 @@ class SXBATCHER_process(object):
         return all_arguments
 
 
-    def sx_process(self, process_args):
+    def sx_batch_process(self, process_args):
         blender_path = process_args[0]
         source_file = process_args[1]
         script_path = process_args[2]
@@ -468,16 +500,14 @@ class SXBATCHER_process(object):
 
         batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path]
 
-        if debug:
+        if sxglobals.debug:
             batch_args.extend(["-d"])
 
         batch_args.extend(["--"])
 
-        if export_path is not None:
-            batch_args.extend(["-x", export_path])
+        batch_args.extend(["-x", export_path])
 
-        if sxtools_path is not None:
-            batch_args.extend(["-l", sxtools_path])
+        batch_args.extend(["-l", sxtools_path])
 
         if subdivision is not None:
             batch_args.extend(["-sd", subdivision])
@@ -509,13 +539,8 @@ class SXBATCHER_process(object):
 
         args = process.get_args()
 
-        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        blender_path = str(args.blenderpath)
-        task_list = args.remotetask
-        folder = str(args.folder)
-        category = str(args.category)
-        filename = str(args.filename)
-        tag = str(args.tag)
+
+
         if args.subdivision is not None:
             subdivision = str(args.subdivision)
         else:
@@ -535,57 +560,19 @@ class SXBATCHER_process(object):
                 else:
                     subprocess.call(['/usr/local/bin/cm', 'update', asset_path])
             asset_dict = init.load_asset_data(catalogue_path)
-        if args.exportpath is not None:
-            export_path = os.path.abspath(args.exportpath)
-        else:
-            print(sxglobals.nodename + ': Export path not specified, using paths defined in source files')
-        if args.sxtools is not None:
-            sxtools_path = os.path.abspath(args.sxtools)
-        else:
-            print(sxglobals.nodename + ' Warning: SX Tools path not specified')
 
+        # grab blender work script from the location of this script
+        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
         source_files = []
-        if args.blenderpath is None:
-            print(sxglobals.nodename + ' Error: Blender path not specified')
-        elif (args.open is None) and (args.folder is None) and (args.remotetask is None):
-            print(sxglobals.nodename + ' Error: No Catalogue or folder specified')
-        else:
-            # Build source file list according to arguments
-            if args.remotetask is not None:
-                for task in task_list:
-                    file_path = task.replace('//', os.path.sep)
-                    source_files.append(os.path.join(asset_path, file_path))
-            elif args.folder is not None:
-                source_files = [str(folder + os.sep + f) for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
-            elif len(asset_dict) > 0:
-                if args.all:
-                    for category in asset_dict.keys():
-                        for key in asset_dict[category].keys():
+
+        # Build source file list according to arguments
+        for obj in sxglobals.export_objs:
+            for category in sxglobals.catalogue.keys():
+                for key, values in sxglobals.catalogue[category].items():
+                    for value in values:
+                        if obj == value:
                             file_path = key.replace('//', os.path.sep)
                             source_files.append(os.path.join(asset_path, file_path))
-                else:
-                    if args.category is not None:
-                        if category in asset_dict.keys():
-                            for key in asset_dict[category].keys():
-                                file_path = key.replace('//', os.path.sep)
-                                source_files.append(os.path.join(asset_path, file_path))
-                    if args.filename is not None:
-                        for category in asset_dict.keys():
-                            for key in asset_dict[category].keys():
-                                if filename in key:
-                                    file_path = key.replace('//', os.path.sep)
-                                    source_files.append(os.path.join(asset_path, file_path))
-                    if args.tag is not None:
-                        for category in asset_dict.keys():
-                            for key, values in asset_dict[category].items():
-                                for value in values:
-                                    if tag == value:
-                                        file_path = key.replace('//', os.path.sep)
-                                        source_files.append(os.path.join(asset_path, file_path))
-                    if (args.category is None) and (args.filename is None) and (args.tag is None):
-                        print(sxglobals.nodename + ': Nothing selected for export')
-            else:
-                print(sxglobals.nodename + ' Error: Invalid Catalogue')
 
             # Construct node-specific task assignment list
             if len(source_files) > 0:
@@ -597,20 +584,29 @@ class SXBATCHER_process(object):
             # Generate task definition for each headless Blender
             tasks = []
             for file in source_files:
-                tasks.append((blender_path, file, script_path, export_path, sxtools_path, subdivision, palette, staticvertexcolors, debug))
+                tasks.append(
+                    (sxglobals.blender_path,
+                    file,
+                    script_path,
+                    os.path.abspath(sxglobals.export_path),
+                    os.path.abspath(sxglobals.sxtools_path),
+                    subdivision,
+                    palette,
+                    staticvertexcolors,
+                    debug))
 
-            if not args.listonly and (len(source_files) != 0):
-                num_cores = multiprocessing.cpu_count()
 
-                then = time.time()
-                print(sxglobals.nodename + ': Spawning workers')
+            num_cores = multiprocessing.cpu_count()
 
-                with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-                    for i, _ in enumerate(pool.imap(self.sx_process, tasks)):
-                        print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
+            then = time.time()
+            print(sxglobals.nodename + ': Spawning workers')
 
-                now = time.time()
-                print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+            with Pool(processes=num_cores, maxtasksperchild=1) as pool:
+                for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
+                    print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
+
+            now = time.time()
+            print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
 
 
 # ------------------------------------------------------------------------

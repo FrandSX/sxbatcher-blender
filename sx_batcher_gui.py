@@ -198,9 +198,11 @@ class SXBATCHER_gui(object):
         self.tabs = ttk.Notebook(self.window)
         tab1 = ttk.Frame(self.tabs)
         tab2 = ttk.Frame(self.tabs)
+        tab3 = ttk.Frame(self.tabs)
 
-        self.tabs.add(tab1, text ='Catalogue')
-        self.tabs.add(tab2, text ='Settings') 
+        self.tabs.add(tab1, text='Catalogue')
+        self.tabs.add(tab2, text='Settings')
+        self.tabs.add(tab3, text='Network')
         self.tabs.pack(expand = 1, fill ="both")
 
         # Content Tab ---------------------------------------------------------
@@ -321,14 +323,16 @@ class SXBATCHER_gui(object):
         # button_export.bind("<Button-1>", self.handle_click)
 
         # Settings Tab --------------------------------------------------------
-        l1 = tk.Label(tab2, text='Blender Path:', width=20)
-        l1.grid(row=1, column=1)
-        l2 = tk.Label(tab2, text='Catalogue Path:', width=20)
-        l2.grid(row=2, column=1)
-        l3 = tk.Label(tab2, text='Export Path:', width=20)
-        l3.grid(row=3, column=1)
-        l4 = tk.Label(tab2, text='SX Tools Path:', width=20)
-        l4.grid(row=4, column=1)
+        l_title1 = tk.Label(tab2, text='Paths', justify='left', anchor='w')
+        l_title1.grid(row=1, column=1, padx=10, pady=10)
+        l1 = tk.Label(tab2, text='Blender Path:', width=20, justify='left', anchor='w')
+        l1.grid(row=2, column=1, sticky='w', padx=10)
+        l2 = tk.Label(tab2, text='Catalogue Path:', width=20, justify='left', anchor='w')
+        l2.grid(row=3, column=1, sticky='w', padx=10)
+        l3 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
+        l3.grid(row=4, column=1, sticky='w', padx=10)
+        l4 = tk.Label(tab2, text='SX Tools Path:', width=20, justify='left', anchor='w')
+        l4.grid(row=5, column=1, sticky='w', padx=10)
 
         e1_str=tk.StringVar(self.window)
         e2_str=tk.StringVar(self.window)
@@ -336,21 +340,89 @@ class SXBATCHER_gui(object):
         e4_str=tk.StringVar(self.window)
 
         e1 = tk.Entry(tab2, textvariable=e1_str, width=60)
-        e1.grid(row=1, column=2)
+        e1.grid(row=2, column=2)
         e2 = tk.Entry(tab2, textvariable=e2_str, width=60)
-        e2.grid(row=2, column=2)
+        e2.grid(row=3, column=2)
         e3 = tk.Entry(tab2, textvariable=e3_str, width=60)
-        e3.grid(row=3, column=2)
+        e3.grid(row=4, column=2)
         e4 = tk.Entry(tab2, textvariable=e4_str, width=60)
-        e4.grid(row=4, column=2)
+        e4.grid(row=5, column=2)
 
         e1_str.set(sxglobals.blender_path)
         e2_str.set(sxglobals.catalogue_path)
         e3_str.set(sxglobals.export_path)
         e4_str.set(sxglobals.sxtools_path)
 
-        b2 = tk.Button(tab2, text='Save')
-        b2.grid(row=6,column=2)
+        l_empty = tk.Label(tab2, text=' ', width=10)
+        l_empty.grid(row=1, column=3)
+
+        b2 = tk.Button(tab2, text='Save Settings')
+        b2.grid(row=1, column=4, padx=10, pady=10)
+
+        l_title2 = tk.Label(tab2, text='Overrides')
+        l_title2.grid(row=6, column=1, padx=10, pady=10)
+
+        c1_bool = tk.BooleanVar(self.window)
+        c2_bool = tk.BooleanVar(self.window)
+        c3_bool = tk.BooleanVar(self.window)
+        e5_str=tk.StringVar(self.window)
+        e6_int=tk.IntVar(self.window)
+
+        c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
+        c1.grid(row=7, column=1, sticky='w', padx=10)
+        c2 = tk.Checkbutton(tab2, text='Subdivisions:', variable=c2_bool, justify='left', anchor='w')
+        c2.grid(row=8, column=1, sticky='w', padx=10)
+        c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
+        c3.grid(row=9, column=1, sticky='w', padx=10)
+
+        e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
+        e5.grid(row=7, column=2, sticky='w')
+        e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
+        e6.grid(row=8, column=2, sticky='w')
+
+        # Network Tab ---------------------------------------------------------
+        l_title3 = tk.Label(tab3, text='Distributed Processing')
+        l_title3.grid(row=1, column=1, padx=10, pady=10)
+
+        c4_bool = tk.BooleanVar(self.window)
+        c5_bool = tk.BooleanVar(self.window)
+        e7_int=tk.IntVar(self.window)
+
+        c4 = tk.Checkbutton(tab3, text='Share CPU Cores:', variable=c4_bool, justify='left', anchor='w')
+        c4.grid(row=2, column=1, sticky='w', padx=10)
+        c3 = tk.Checkbutton(tab3, text='Use Network Nodes', variable=c5_bool, justify='left', anchor='w')
+        c3.grid(row=3, column=1, sticky='w', padx=10)
+
+        e7 = tk.Entry(tab3, textvariable=e7_int, width=3, justify='left')
+        e7.grid(row=2, column=2, sticky='w')
+
+        l_title4 = tk.Label(tab3, text='Node Discovery')
+        l_title4.grid(row=4, column=1, padx=10, pady=10)
+
+
+        def table(root, data, startrow, startcolumn):
+            rows = len(data)
+            columns = len(data[0])
+            for i in range(rows):
+                for j in range(columns):
+                    self.e = tk.Entry(root)
+                    self.e.grid(row=i+startrow, column=j+startcolumn)
+                    self.e.insert('end', data[i][j])
+ 
+        # ip, hostname, cores, os
+        data = [('192.168.0.100','doc','linux',32),
+            ('192.168.0.101','grumpy','win',16),
+            ('192.168.0.102','sleepy','mac',8),
+            ('192.168.0.103','bashful','linux',8),
+            ('192.168.0.104','happy','win',10),
+            ('192.168.0.105','sneezy','mac',6),
+            ('192.168.0.106','dopey','win',4)]
+
+        table(tab3, data, 5, 1)
+
+
+
+
 
 
         self.window.mainloop()

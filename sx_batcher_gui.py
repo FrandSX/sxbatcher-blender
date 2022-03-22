@@ -27,6 +27,11 @@ class SXBATCHER_globals(object):
         self.categories = None
         self.category = None
         self.debug = False
+        self.palette = False
+        self.palette_name = None
+        self.subdivisions = False
+        self.subdivision_count = None
+        self.static_vertex_colors = False
         self.export_objs = None
 
 
@@ -140,18 +145,6 @@ class SXBATCHER_gui(object):
         return lb
 
 
-    def handle_click(self, event):
-        sxglobals.category = random.choice(sxglobals.categories)
-        self.refresh_lb_items()
-        self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
-
-
-    def handle_click_change_category(self, event, category):
-        sxglobals.category = category
-        self.refresh_lb_items()
-        self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
-
-
     def handle_click_add_catalogue(self, event):
         self.lb_export.delete(0, 'end')
         for category in sxglobals.catalogue.keys():
@@ -180,6 +173,7 @@ class SXBATCHER_gui(object):
             sxglobals.export_objs.append(self.lb_export.get(i))
         process.export_selected()
 
+
     def refresh_lb_items(self):
         if self.lb_items is not None:
             self.lb_items.delete(0, 'end')
@@ -203,42 +197,51 @@ class SXBATCHER_gui(object):
 
     def draw_window(self):
         def display_selected(choice):
-            choice = variable.get()
-            sxglobals.category = choice
+            sxglobals.category = cat_var.get()
             self.refresh_lb_items()
             self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
+
 
         def update_blender_path(var, index, mode):
             sxglobals.blender_path = e1_str.get()
             self.toggle_batch_button()
 
+
         def update_catalogue_path(var, index, mode):
             sxglobals.catalogue_path = e2_str.get()
             self.toggle_batch_button()
+
 
         def update_export_path(var, index, mode):
             sxglobals.export_path = e3_str.get()
             self.toggle_batch_button()
 
+
         def update_sxtools_path(var, index, mode):
             sxglobals.sxtools_path = e4_str.get()
             self.toggle_batch_button()
 
+
+        def update_palette_override(var, index, mode):
+            sxglobals.palette = c1_bool.get()
+            sxglobals.palette_name = e5_str.get()
+
+
+        def update_subdivision_override(var, index, mode):
+            sxglobals.subdivisions = c2_bool.get()
+            sxglobals.subdivision_count = int(e6_str.get())
+
+
+        def update_flatten_override(var, index, mode):
+            sxglobals.static_vertex_colors = c3_bool.get()
+
+
+        def update_debug_override(var, index, mode):
+            sxglobals.debug = c4_bool.get()
+
+
         self.window = tk.Tk()
         self.window.title('SX Batcher')
-
-        # Top menu bar --------------------------------------------------------
-        # menubar = tk.Menu(self.window)
-
-        # menu_file = tk.Menu(menubar, tearoff=0)
-
-        # menubar.add_cascade(label="File", menu=menu_file)
-
-        # menu_file.add_command(label="Open Catalogue", command=temp_test())
-        # menu_file.add_command(label="Settings", command=temp_test())
-        # menu_file.add_command(label="Quit", command=self.window.quit)  
- 
-        # self.window.config(menu=menubar)
 
         # Top tabs ------------------------------------------------------------
         self.tabs = ttk.Notebook(self.window)
@@ -259,17 +262,18 @@ class SXBATCHER_gui(object):
         # Frame A
 
         # Category OptionMenu
-        variable = tk.StringVar()
-        variable.set(sxglobals.category)
+        cat_var = tk.StringVar()
+        cat_var.set(sxglobals.category)
 
         dropdown = tk.OptionMenu(
             self.frame_a,
-            variable,
+            cat_var,
             *sxglobals.categories,
             command=display_selected
             )
         dropdown.pack(side='top', anchor='nw', expand=False)
 
+        # source object list
         self.frame_items = tk.Frame(master=self.frame_a)
         self.refresh_lb_items()
         self.lb_items.pack(side='left', fill='both', expand=True)
@@ -357,8 +361,7 @@ class SXBATCHER_gui(object):
         self.frame_b.pack(side='left', fill='both', expand=True)
         self.frame_c.pack(side='left', fill='both', expand=True)
 
-        # sxglobals.category = entry.get()
-
+        # Button event handling
         button_add_catalogue.bind("<Button-1>", self.handle_click_add_catalogue)
         button_add_category.bind("<Button-1>", self.handle_click_add_category)
         button_add_selected.bind("<Button-1>", self.handle_click_add_selected)
@@ -414,7 +417,13 @@ class SXBATCHER_gui(object):
         c3_bool = tk.BooleanVar(self.window)
         c4_bool = tk.BooleanVar(self.window)
         e5_str=tk.StringVar(self.window)
-        e6_int=tk.IntVar(self.window)
+        e6_str=tk.IntVar(self.window, value=0)
+        c1_bool.trace_add('write', update_palette_override)
+        c2_bool.trace_add('write', update_subdivision_override)
+        c3_bool.trace_add('write', update_flatten_override)
+        c4_bool.trace_add('write', update_debug_override)
+        e5_str.trace_add('write', update_palette_override)
+        e6_str.trace_add('write', update_subdivision_override)
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=7, column=1, sticky='w', padx=10)
@@ -427,7 +436,7 @@ class SXBATCHER_gui(object):
 
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
         e5.grid(row=7, column=2, sticky='w')
-        e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
+        e6 = tk.Entry(tab2, textvariable=e6_str, width=3, justify='left')
         e6.grid(row=8, column=2, sticky='w')
 
         # Network Tab ---------------------------------------------------------
@@ -553,16 +562,17 @@ class SXBATCHER_process(object):
         asset_path = None
         args = process.get_args()
 
-        if args.subdivision is not None:
-            subdivision = str(args.subdivision)
+        if sxglobals.subdivisions:
+            subdivision = str(sxglobals.subdivision_count)
         else:
             subdivision = None
-        if args.palette is not None:
-            palette = str(args.palette)
+        if sxglobals.palette:
+            palette = sxglobals.palette_name
         else:
             palette = None
-        staticvertexcolors = args.staticvertexcolors
-        debug = args.verbose
+        staticvertexcolors = sxglobals.static_vertex_colors
+        debug = sxglobals.debug
+
         catalogue_path = str(args.open)
         if args.open is not None:
             asset_path = os.path.split(catalogue_path)[0].replace('//', os.path.sep)

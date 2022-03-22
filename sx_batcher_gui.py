@@ -178,7 +178,6 @@ class SXBATCHER_gui(object):
         sxglobals.export_objs = []
         for i in range(self.lb_export.size()):
             sxglobals.export_objs.append(self.lb_export.get(i))
-        print(sxglobals.export_objs)
         process.export_selected()
 
     def refresh_lb_items(self):
@@ -203,6 +202,28 @@ class SXBATCHER_gui(object):
 
 
     def draw_window(self):
+        def display_selected(choice):
+            choice = variable.get()
+            sxglobals.category = choice
+            self.refresh_lb_items()
+            self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
+
+        def update_blender_path(var, index, mode):
+            sxglobals.blender_path = e1_str.get()
+            self.toggle_batch_button()
+
+        def update_catalogue_path(var, index, mode):
+            sxglobals.catalogue_path = e2_str.get()
+            self.toggle_batch_button()
+
+        def update_export_path(var, index, mode):
+            sxglobals.export_path = e3_str.get()
+            self.toggle_batch_button()
+
+        def update_sxtools_path(var, index, mode):
+            sxglobals.sxtools_path = e4_str.get()
+            self.toggle_batch_button()
+
         self.window = tk.Tk()
         self.window.title('SX Batcher')
 
@@ -234,16 +255,8 @@ class SXBATCHER_gui(object):
         self.frame_a = tk.Frame(master=tab1, bd=10)
         self.frame_b = tk.Frame(master=tab1, bd=10)
         self.frame_c = tk.Frame(master=tab1, bd=10)
-
-
-        # update=lambda self, context: update_modifiers(self, context, 'xmirror')
     
         # Frame A
-        def display_selected(choice):
-            choice = variable.get()
-            sxglobals.category = choice
-            self.refresh_lb_items()
-            self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
 
         # Category OptionMenu
         variable = tk.StringVar()
@@ -368,6 +381,10 @@ class SXBATCHER_gui(object):
         e2_str=tk.StringVar(self.window)
         e3_str=tk.StringVar(self.window)
         e4_str=tk.StringVar(self.window)
+        e1_str.trace_add('write', update_blender_path)
+        e2_str.trace_add('write', update_catalogue_path)
+        e3_str.trace_add('write', update_export_path)
+        e4_str.trace_add('write', update_sxtools_path)
 
         e1 = tk.Entry(tab2, textvariable=e1_str, width=60)
         e1.grid(row=2, column=2)
@@ -534,12 +551,7 @@ class SXBATCHER_process(object):
 
     def export_selected(self):
         asset_path = None
-        export_path = None
-        sxtools_path = None
-
         args = process.get_args()
-
-
 
         if args.subdivision is not None:
             subdivision = str(args.subdivision)
@@ -574,39 +586,39 @@ class SXBATCHER_process(object):
                             file_path = key.replace('//', os.path.sep)
                             source_files.append(os.path.join(asset_path, file_path))
 
-            # Construct node-specific task assignment list
-            if len(source_files) > 0:
-                source_files = list(set(source_files))
-                print('\n' + sxglobals.nodename + ': Source files:')
-                for file in source_files:
-                    print(file)
-
-            # Generate task definition for each headless Blender
-            tasks = []
+        # Construct node-specific task assignment list
+        if len(source_files) > 0:
+            source_files = list(set(source_files))
+            print('\n' + sxglobals.nodename + ': Source files:')
             for file in source_files:
-                tasks.append(
-                    (sxglobals.blender_path,
-                    file,
-                    script_path,
-                    os.path.abspath(sxglobals.export_path),
-                    os.path.abspath(sxglobals.sxtools_path),
-                    subdivision,
-                    palette,
-                    staticvertexcolors,
-                    debug))
+                print(file)
+
+        # Generate task definition for each headless Blender
+        tasks = []
+        for file in source_files:
+            tasks.append(
+                (sxglobals.blender_path,
+                file,
+                script_path,
+                os.path.abspath(sxglobals.export_path),
+                os.path.abspath(sxglobals.sxtools_path),
+                subdivision,
+                palette,
+                staticvertexcolors,
+                debug))
 
 
-            num_cores = multiprocessing.cpu_count()
+        num_cores = multiprocessing.cpu_count()
 
-            then = time.time()
-            print(sxglobals.nodename + ': Spawning workers')
+        then = time.time()
+        print(sxglobals.nodename + ': Spawning workers')
 
-            with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-                for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
-                    print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
+        with Pool(processes=num_cores, maxtasksperchild=1) as pool:
+            for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
+                print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
 
-            now = time.time()
-            print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+        now = time.time()
+        print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
 
 
 # ------------------------------------------------------------------------

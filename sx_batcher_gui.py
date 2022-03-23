@@ -1,7 +1,7 @@
+import threading
 import subprocess
 import multiprocessing
 import time
-import random
 import json
 import socket
 import shutil
@@ -9,7 +9,6 @@ from multiprocessing import Pool
 import os
 import tkinter as tk
 from tkinter import MULTIPLE, ttk
-import argparse
 
 
 # ------------------------------------------------------------------------
@@ -29,11 +28,13 @@ class SXBATCHER_globals(object):
         self.debug = False
         self.palette = False
         self.palette_name = None
-        self.subdivisions = False
+        self.subdivision = False
         self.subdivision_count = None
         self.static_vertex_colors = False
         self.export_objs = None
         self.update_repo = False
+        self.source_files = None
+        self.tasks = None
 
 
     def __del__(self):
@@ -113,6 +114,129 @@ class SXBATCHER_init(object):
             return {}
 
 
+# ------------------------------------------------------------------------
+#    Multiprocessing
+# ------------------------------------------------------------------------
+class SXBATCHER_batch_process(object):
+    def __init__(self):
+        return None
+
+
+    def __del__(self):
+        print('SX Batcher: Exiting batch')
+
+
+    def sx_batch_process(self, process_args):
+        blender_path = process_args[0]
+        source_file = process_args[1]
+        script_path = process_args[2]
+        export_path = process_args[3]
+        sxtools_path = process_args[4]
+        subdivision = process_args[5]
+        palette = process_args[6]
+        staticvertexcolors = process_args[7]
+        debug = process_args[8]
+
+        batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path]
+
+        if debug:
+            batch_args.extend(["-d"])
+
+        batch_args.extend(["--"])
+
+        batch_args.extend(["-x", export_path])
+
+        batch_args.extend(["-l", sxtools_path])
+
+        if subdivision is not None:
+            batch_args.extend(["-sd", subdivision])
+
+        if palette is not None:
+            batch_args.extend(["-sp", palette])
+
+        if staticvertexcolors:
+            batch_args.extend(["-st"])
+
+        try:
+            p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
+            # For debugging add "-d" to batch args and remove the keyword filter
+            lines = p.stdout.splitlines()
+            for line in lines:
+                if debug:
+                    print(line)
+                else:
+                    if 'Error' in line:
+                        print(line)
+        except subprocess.CalledProcessError as error:
+            print('SX Batch Error:', source_file)
+
+
+    def prepare_tasks(self):
+        # grab blender work script from the location of this script
+        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
+        asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+        sxglobals.source_files = []
+        sxglobals.tasks = []
+        subdivision = None
+        palette = None
+
+        if sxglobals.subdivision:
+            subdivision = str(sxglobals.subdivision_count)
+        if sxglobals.palette:
+            palette = sxglobals.palette_name
+
+        # Build source file list according to arguments
+        for obj in sxglobals.export_objs:
+            for category in sxglobals.catalogue.keys():
+                for key, values in sxglobals.catalogue[category].items():
+                    for value in values:
+                        if obj == value:
+                            file_path = key.replace('//', os.path.sep)
+                            sxglobals.source_files.append(os.path.join(asset_path, file_path))
+
+        # Construct node-specific task assignment list
+        if len(sxglobals.source_files) > 0:
+            sxglobals.source_files = list(set(sxglobals.source_files))
+            print('\n' + sxglobals.nodename + ': Source files:')
+            for file in sxglobals.source_files:
+                print(file)
+
+        # Generate task definition for each headless Blender
+        for file in sxglobals.source_files:
+            sxglobals.tasks.append(
+                (sxglobals.blender_path,
+                file,
+                script_path,
+                os.path.abspath(sxglobals.export_path),
+                os.path.abspath(sxglobals.sxtools_path),
+                subdivision,
+                palette,
+                sxglobals.static_vertex_colors,
+                sxglobals.debug))
+
+
+    def log_result(self, result):
+        pass
+
+
+    def batch_spawner(self):
+        tasks = sxglobals.tasks[:]
+        source_files = sxglobals.source_files[:]
+        num_cores = multiprocessing.cpu_count()
+
+        then = time.time()
+        print(sxglobals.nodename + ': Spawning workers')
+
+        with Pool(processes=num_cores, maxtasksperchild=1) as pool:
+            # for i, _ in enumerate(pool.apply_async(batch.sx_batch_process, tasks)):
+            for i, _ in enumerate(pool.imap(batch.sx_batch_process, tasks)):
+                gui.progress_bar['value'] = round(i/len(tasks)*100)
+                # print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
+
+        now = time.time()
+        print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+
+
 class SXBATCHER_gui(object):
     def __init__(self):
         self.window = None
@@ -128,7 +252,7 @@ class SXBATCHER_gui(object):
         self.var_item_count = None
         self.var_export_count = None
         self.button_batch = None
-
+        self.progress_bar = None
         return None
 
 
@@ -168,11 +292,39 @@ class SXBATCHER_gui(object):
         self.toggle_batch_button()
 
 
+    def handle_click_update_plastic(self, event):
+        if sxglobals.update_repo:
+            if os.name == 'nt':
+                subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', asset_path])
+            else:
+                subprocess.call(['/usr/local/bin/cm', 'update', asset_path])
+            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+
+
     def handle_click_start_batch(self, event):
-        sxglobals.export_objs = []
-        for i in range(self.lb_export.size()):
-            sxglobals.export_objs.append(self.lb_export.get(i))
-        process.export_selected()
+        if self.button_batch['state'] == 'normal':
+            self.button_batch['state'] = 'disabled'
+            sxglobals.export_objs = []
+            self.button_batch.configure(text='Batch Running')
+            for i in range(self.lb_export.size()):
+                sxglobals.export_objs.append(self.lb_export.get(i))
+            batch.prepare_tasks()
+            t = threading.Thread(target=batch.batch_spawner)
+            t.start()
+            self.step_check(t)
+
+
+    def step_check(self, t):
+        self.window.after(1000, self.check_progress, t)
+
+
+    def check_progress(self, t):
+        if not t.is_alive():
+            self.button_batch.configure(text='Start Batch')
+            self.button_batch['state'] = 'normal'
+            self.progress_bar['value'] = 0
+        else:
+            self.step_check(t)
 
 
     def refresh_lb_items(self):
@@ -208,18 +360,18 @@ class SXBATCHER_gui(object):
             self.toggle_batch_button()
 
 
+        def update_sxtools_path(var, index, mode):
+            sxglobals.sxtools_path = e2_str.get()
+            self.toggle_batch_button()
+
+
         def update_catalogue_path(var, index, mode):
-            sxglobals.catalogue_path = e2_str.get()
+            sxglobals.catalogue_path = e3_str.get()
             self.toggle_batch_button()
 
 
         def update_export_path(var, index, mode):
-            sxglobals.export_path = e3_str.get()
-            self.toggle_batch_button()
-
-
-        def update_sxtools_path(var, index, mode):
-            sxglobals.sxtools_path = e4_str.get()
+            sxglobals.export_path = e4_str.get()
             self.toggle_batch_button()
 
 
@@ -229,7 +381,7 @@ class SXBATCHER_gui(object):
 
 
         def update_subdivision_override(var, index, mode):
-            sxglobals.subdivisions = c2_bool.get()
+            sxglobals.subdivision = c2_bool.get()
             sxglobals.subdivision_count = int(e6_str.get())
 
 
@@ -331,6 +483,9 @@ class SXBATCHER_gui(object):
         )
         button_clear_exports.pack()
 
+        self.progress_bar = ttk.Progressbar(master=self.frame_b, orient='horizontal', length=100, mode='determinate')
+        self.progress_bar.pack(expand=True)
+
 
         # Frame C
         self.label_exports = tk.Label(master=self.frame_c, text='Batch Files:')
@@ -351,7 +506,7 @@ class SXBATCHER_gui(object):
 
         self.button_batch = tk.Button(
             master = self.frame_c,
-            text="Start Batch",
+            text='Start Batch',
             width=20,
             height=3,
         )
@@ -374,11 +529,11 @@ class SXBATCHER_gui(object):
         l_title1.grid(row=1, column=1, padx=10, pady=10)
         l1 = tk.Label(tab2, text='Blender Path:', width=20, justify='left', anchor='w')
         l1.grid(row=2, column=1, sticky='w', padx=10)
-        l2 = tk.Label(tab2, text='Catalogue Path:', width=20, justify='left', anchor='w')
+        l2 = tk.Label(tab2, text='SX Tools Path:', width=20, justify='left', anchor='w')
         l2.grid(row=3, column=1, sticky='w', padx=10)
-        l3 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
+        l3 = tk.Label(tab2, text='Catalogue Path:', width=20, justify='left', anchor='w')
         l3.grid(row=4, column=1, sticky='w', padx=10)
-        l4 = tk.Label(tab2, text='SX Tools Path:', width=20, justify='left', anchor='w')
+        l4 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
         l4.grid(row=5, column=1, sticky='w', padx=10)
 
         e1_str=tk.StringVar(self.window)
@@ -386,9 +541,9 @@ class SXBATCHER_gui(object):
         e3_str=tk.StringVar(self.window)
         e4_str=tk.StringVar(self.window)
         e1_str.trace_add('write', update_blender_path)
-        e2_str.trace_add('write', update_catalogue_path)
-        e3_str.trace_add('write', update_export_path)
-        e4_str.trace_add('write', update_sxtools_path)
+        e2_str.trace_add('write', update_sxtools_path)
+        e3_str.trace_add('write', update_catalogue_path)
+        e4_str.trace_add('write', update_export_path)
 
         e1 = tk.Entry(tab2, textvariable=e1_str, width=60)
         e1.grid(row=2, column=2)
@@ -400,9 +555,9 @@ class SXBATCHER_gui(object):
         e4.grid(row=5, column=2)
 
         e1_str.set(sxglobals.blender_path)
-        e2_str.set(sxglobals.catalogue_path)
-        e3_str.set(sxglobals.export_path)
-        e4_str.set(sxglobals.sxtools_path)
+        e2_str.set(sxglobals.sxtools_path)
+        e3_str.set(sxglobals.catalogue_path)
+        e4_str.set(sxglobals.export_path)
 
         l_empty = tk.Label(tab2, text=' ', width=10)
         l_empty.grid(row=1, column=3)
@@ -428,7 +583,7 @@ class SXBATCHER_gui(object):
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=7, column=1, sticky='w', padx=10)
-        c2 = tk.Checkbutton(tab2, text='Subdivisions:', variable=c2_bool, justify='left', anchor='w')
+        c2 = tk.Checkbutton(tab2, text='Subdivision:', variable=c2_bool, justify='left', anchor='w')
         c2.grid(row=8, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
         c3.grid(row=9, column=1, sticky='w', padx=10)
@@ -480,133 +635,7 @@ class SXBATCHER_gui(object):
 
         table(tab3, data, 5, 1)
 
-
         self.window.mainloop()
-
-
-class SXBATCHER_process(object):
-    def __init__(self):
-        return None
-
-
-    def __del__(self):
-        print('SX Batcher: Exiting process')
-
-
-    def sx_batch_process(self, process_args):
-        blender_path = process_args[0]
-        source_file = process_args[1]
-        script_path = process_args[2]
-        export_path = process_args[3]
-        sxtools_path = process_args[4]
-        subdivision = process_args[5]
-        palette = process_args[6]
-        staticvertexcolors = process_args[7]
-        debug = process_args[8]
-
-        batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path]
-
-        if sxglobals.debug:
-            batch_args.extend(["-d"])
-
-        batch_args.extend(["--"])
-
-        batch_args.extend(["-x", export_path])
-
-        batch_args.extend(["-l", sxtools_path])
-
-        if subdivision is not None:
-            batch_args.extend(["-sd", subdivision])
-
-        if palette is not None:
-            batch_args.extend(["-sp", palette])
-
-        if staticvertexcolors:
-            batch_args.extend(["-st"])
-
-        try:
-            p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
-            # For debugging add "-d" to batch args and remove the keyword filter
-            lines = p.stdout.splitlines()
-            for line in lines:
-                if debug:
-                    print(line)
-                else:
-                    if 'Error' in line:
-                        print(line)
-        except subprocess.CalledProcessError as error:
-            print('SX Batch Error:', source_file)
-
-
-    def export_selected(self):
-        asset_path = None
-
-        if sxglobals.subdivisions:
-            subdivision = str(sxglobals.subdivision_count)
-        else:
-            subdivision = None
-        if sxglobals.palette:
-            palette = sxglobals.palette_name
-        else:
-            palette = None
-        staticvertexcolors = sxglobals.static_vertex_colors
-        debug = sxglobals.debug
-
-        if sxglobals.catalogue_path is not None:
-            asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
-            if sxglobals.update_repo:
-                if os.name == 'nt':
-                    subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', asset_path])
-                else:
-                    subprocess.call(['/usr/local/bin/cm', 'update', asset_path])
-            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-
-        # grab blender work script from the location of this script
-        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        source_files = []
-
-        # Build source file list according to arguments
-        for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue.keys():
-                for key, values in sxglobals.catalogue[category].items():
-                    for value in values:
-                        if obj == value:
-                            file_path = key.replace('//', os.path.sep)
-                            source_files.append(os.path.join(asset_path, file_path))
-
-        # Construct node-specific task assignment list
-        if len(source_files) > 0:
-            source_files = list(set(source_files))
-            print('\n' + sxglobals.nodename + ': Source files:')
-            for file in source_files:
-                print(file)
-
-        # Generate task definition for each headless Blender
-        tasks = []
-        for file in source_files:
-            tasks.append(
-                (sxglobals.blender_path,
-                file,
-                script_path,
-                os.path.abspath(sxglobals.export_path),
-                os.path.abspath(sxglobals.sxtools_path),
-                subdivision,
-                palette,
-                staticvertexcolors,
-                debug))
-
-
-        num_cores = multiprocessing.cpu_count()
-
-        then = time.time()
-        print(sxglobals.nodename + ': Spawning workers')
-
-        with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
-                print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
-
-        now = time.time()
-        print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
 
 
 # ------------------------------------------------------------------------
@@ -617,7 +646,7 @@ class SXBATCHER_process(object):
 sxglobals = SXBATCHER_globals()
 init = SXBATCHER_init()
 gui = SXBATCHER_gui()
-process = SXBATCHER_process()
+batch = SXBATCHER_batch_process()
 
 if __name__ == '__main__':
     sxglobals.ip_addr = init.get_ip()
@@ -627,4 +656,5 @@ if __name__ == '__main__':
     sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
     sxglobals.categories = list(sxglobals.catalogue.keys())
     sxglobals.category = sxglobals.categories[0]
+
     gui.draw_window()

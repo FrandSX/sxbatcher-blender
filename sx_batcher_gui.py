@@ -38,7 +38,8 @@ class SXBATCHER_globals(object):
 
 
     def __del__(self):
-        print('SX Batcher: Exiting sxglobals')
+        pass
+        # print('SX Batcher: Exiting sxglobals')
 
 
 # ------------------------------------------------------------------------
@@ -50,7 +51,8 @@ class SXBATCHER_init(object):
 
 
     def __del__(self):
-        print('SX Batcher: Exiting init')
+        pass
+        # print('SX Batcher: Exiting init')
 
 
     def get_ip(self):
@@ -123,7 +125,8 @@ class SXBATCHER_batch_process(object):
 
 
     def __del__(self):
-        print('SX Batcher: Exiting batch')
+        pass
+        # print('SX Batcher: Exiting batch')
 
 
     def sx_batch_process(self, process_args):
@@ -247,6 +250,7 @@ class SXBATCHER_gui(object):
         self.frame_items = None
         self.lb_items = None
         self.lb_export = None
+        self.text_tags = None
         self.label_category = None
         self.label_item_count = None
         self.var_item_count = None
@@ -257,7 +261,8 @@ class SXBATCHER_gui(object):
 
 
     def __del__(self):
-        print('SX Batcher: Exiting gui')
+        pass
+        # print('SX Batcher: Exiting gui')
 
 
     def list_category(self, category, listbox):
@@ -301,6 +306,18 @@ class SXBATCHER_gui(object):
             sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
 
 
+    def handle_click_listboxselect(self, event):
+        tags = ''
+        selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
+        for obj in selected_item_list:
+            for key, values in sxglobals.catalogue[sxglobals.category].items():
+                if obj in values:
+                    for value in values:
+                        if '_root' not in value:
+                            tags = tags + value + ' '
+            tags = tags + '\n'
+        self.label_found_tags.configure(text='Tags in Selected:\n\n'+tags)
+
     def handle_click_start_batch(self, event):
         if self.button_batch['state'] == 'normal':
             self.button_batch['state'] = 'disabled'
@@ -333,6 +350,11 @@ class SXBATCHER_gui(object):
         else:
             self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
         self.lb_items = self.list_category(sxglobals.category, self.lb_items)
+
+
+    def clear_selection(self, event):
+        self.lb_items.selection_clear(0, 'end')
+        self.label_found_tags.configure(text='Tags in Selected:')
 
 
     def clear_lb_export(self, event):
@@ -460,7 +482,7 @@ class SXBATCHER_gui(object):
             width=20,
             height=3,
         )
-        button_add_catalogue.pack()
+        button_add_catalogue.pack(pady=10)
         button_add_category = tk.Button(
             master = self.frame_b,
             text="Add all from Category",
@@ -474,7 +496,7 @@ class SXBATCHER_gui(object):
             width=20,
             height=3,
         )
-        button_add_selected.pack()
+        button_add_selected.pack(pady=10)
         button_clear_exports = tk.Button(
             master = self.frame_b,
             text="Clear Batch List",
@@ -483,8 +505,11 @@ class SXBATCHER_gui(object):
         )
         button_clear_exports.pack()
 
+        self.label_found_tags = tk.Label(master=self.frame_b, text='Tags in Selected:')
+        self.label_found_tags.pack(pady=20)
+
         self.progress_bar = ttk.Progressbar(master=self.frame_b, orient='horizontal', length=100, mode='determinate')
-        self.progress_bar.pack(expand=True)
+        self.progress_bar.pack(side='bottom', anchor='s', pady=20, expand=True)
 
 
         # Frame C
@@ -517,12 +542,14 @@ class SXBATCHER_gui(object):
         self.frame_b.pack(side='left', fill='both', expand=True)
         self.frame_c.pack(side='left', fill='both', expand=True)
 
-        # Button event handling
-        button_add_catalogue.bind("<Button-1>", self.handle_click_add_catalogue)
-        button_add_category.bind("<Button-1>", self.handle_click_add_category)
-        button_add_selected.bind("<Button-1>", self.handle_click_add_selected)
-        button_clear_exports.bind("<Button-1>", self.clear_lb_export)
-        self.button_batch.bind("<Button-1>", self.handle_click_start_batch)
+        # Event handling
+        self.lb_items.bind('<<ListboxSelect>>', self.handle_click_listboxselect)
+        button_add_catalogue.bind('<Button-1>', self.handle_click_add_catalogue)
+        button_add_category.bind('<Button-1>', self.handle_click_add_category)
+        button_add_selected.bind('<Button-1>', self.handle_click_add_selected)
+        button_clear_selection.bind('<Button-1>', self.clear_selection)
+        button_clear_exports.bind('<Button-1>', self.clear_lb_export)
+        self.button_batch.bind('<Button-1>', self.handle_click_start_batch)
 
         # Settings Tab --------------------------------------------------------
         l_title1 = tk.Label(tab2, text='Paths', justify='left', anchor='w')

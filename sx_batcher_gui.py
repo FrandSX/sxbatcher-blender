@@ -255,6 +255,7 @@ class SXBATCHER_gui(object):
         self.label_item_count = None
         self.var_item_count = None
         self.var_export_count = None
+        self.var_tag = None
         self.button_batch = None
         self.progress_bar = None
         return None
@@ -297,6 +298,20 @@ class SXBATCHER_gui(object):
         self.toggle_batch_button()
 
 
+    def handle_click_add_tagged(self, event):
+        tag = self.var_tag.get()
+        for category in sxglobals.catalogue.keys():
+            for key, values in sxglobals.catalogue[category].items():
+                for value in values:
+                    if tag == value:
+                        for value in values:
+                            if '_root' in value:
+                                self.lb_export.insert('end', value)
+
+        self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
+        self.toggle_batch_button()
+
+
     def handle_click_update_plastic(self, event):
         if sxglobals.update_repo:
             if os.name == 'nt':
@@ -317,6 +332,7 @@ class SXBATCHER_gui(object):
                             tags = tags + value + ' '
             tags = tags + '\n'
         self.label_found_tags.configure(text='Tags in Selected:\n\n'+tags)
+
 
     def handle_click_start_batch(self, event):
         if self.button_batch['state'] == 'normal':
@@ -472,17 +488,13 @@ class SXBATCHER_gui(object):
 
 
         # Frame B
-        label_ip = tk.Label(master=self.frame_b, text=sxglobals.ip_addr)
-        label_ip.pack()
-        entry = tk.Entry(master=self.frame_b)
-        entry.pack()
         button_add_catalogue = tk.Button(
             master = self.frame_b,
             text="Add all from Catalogue",
             width=20,
             height=3,
         )
-        button_add_catalogue.pack(pady=10)
+        button_add_catalogue.pack(pady=20)
         button_add_category = tk.Button(
             master = self.frame_b,
             text="Add all from Category",
@@ -496,17 +508,36 @@ class SXBATCHER_gui(object):
             width=20,
             height=3,
         )
-        button_add_selected.pack(pady=10)
+        button_add_selected.pack(pady=20)
+
+
+
+        self.var_tag = tk.StringVar(self.window)
+        tag_entry = tk.Entry(master=self.frame_b, textvariable=self.var_tag)
+        tag_entry.pack()
+        button_add_tagged = tk.Button(
+            master = self.frame_b,
+            text="Add Tagged",
+            width=20,
+            height=3,
+        )
+        button_add_tagged.pack(pady=10)
+
+
+
+
+
+
         button_clear_exports = tk.Button(
             master = self.frame_b,
             text="Clear Batch List",
             width=20,
             height=3,
         )
-        button_clear_exports.pack()
+        button_clear_exports.pack(pady=30)
 
         self.label_found_tags = tk.Label(master=self.frame_b, text='Tags in Selected:')
-        self.label_found_tags.pack(pady=20)
+        self.label_found_tags.pack()
 
         self.progress_bar = ttk.Progressbar(master=self.frame_b, orient='horizontal', length=100, mode='determinate')
         self.progress_bar.pack(side='bottom', anchor='s', pady=20, expand=True)
@@ -547,6 +578,7 @@ class SXBATCHER_gui(object):
         button_add_catalogue.bind('<Button-1>', self.handle_click_add_catalogue)
         button_add_category.bind('<Button-1>', self.handle_click_add_category)
         button_add_selected.bind('<Button-1>', self.handle_click_add_selected)
+        button_add_tagged.bind('<Button-1>', self.handle_click_add_tagged)
         button_clear_selection.bind('<Button-1>', self.clear_selection)
         button_clear_exports.bind('<Button-1>', self.clear_lb_export)
         self.button_batch.bind('<Button-1>', self.handle_click_start_batch)

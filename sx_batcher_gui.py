@@ -1,3 +1,4 @@
+from stringprep import c22_specials
 import threading
 import subprocess
 import multiprocessing
@@ -20,6 +21,10 @@ class SXBATCHER_globals(object):
         self.catalogue_path = None
         self.export_path = None
         self.sxtools_path = None
+        self.num_cores = None
+        self.share_cpus = None
+        self.shared_cores = None
+        self.use_distributed = None
         self.ip_addr = None
         self.nodename = None
         self.catalogue = None
@@ -91,8 +96,43 @@ class SXBATCHER_init(object):
             sxglobals.catalogue_path = conf.get('catalogue_path')
             sxglobals.export_path = conf.get('export_path')
             sxglobals.sxtools_path = conf.get('sxtools_path')
+            sxglobals.debug = bool(int(conf.get('debug', False)))
+            sxglobals.palette = bool(int(conf.get('palette', False)))
+            sxglobals.palette_name = conf.get('palette_name', '')
+            sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
+            sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
+            sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+            sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
+            sxglobals.shared_cores = int(conf.get('shared_cores', 0))
+            sxglobals.use_distributed = bool(int(conf.get('use_distributed', False)))
 
             self.validate_paths()
+
+
+    def save_conf(self):
+        if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
+            conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+
+            with open(conf_path, 'w') as output:
+                tempDict = {}
+                tempDict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
+                tempDict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
+                tempDict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
+                tempDict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
+                tempDict['debug'] = str(int(sxglobals.debug))
+                tempDict['palette'] = str(int(sxglobals.palette))
+                tempDict['palette_name'] = sxglobals.palette_name
+                tempDict['subdivision'] = str(int(sxglobals.subdivision))
+                tempDict['subdivision_count'] = str(sxglobals.subdivision_count)
+                tempDict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
+                tempDict['share_cpus'] = str(int(sxglobals.share_cpus))
+                tempDict['shared_cores'] = str(int(sxglobals.shared_cores))
+                tempDict['use_distributed'] = str(int(sxglobals.use_distributed))
+
+                json.dump(tempDict, output, indent=4)
+                output.close()
+
+            print('SX Batcher: ' + conf_path + ' saved')
 
 
     def validate_paths(self):
@@ -347,6 +387,10 @@ class SXBATCHER_gui(object):
             self.step_check(t)
 
 
+    def handle_click_save_settings(self, event):
+        init.save_conf()
+
+
     def step_check(self, t):
         self.window.after(1000, self.check_progress, t)
 
@@ -420,7 +464,16 @@ class SXBATCHER_gui(object):
 
         def update_subdivision_override(var, index, mode):
             sxglobals.subdivision = c2_bool.get()
-            sxglobals.subdivision_count = int(e6_str.get())
+
+            try:
+                subdivisions = e6_int.get()
+            except Exception:
+                subdivisions = 0
+
+            if subdivisions < 0:
+                sxglobals.subdivision_count = 0
+            else:
+                sxglobals.subdivision_count = subdivisions
 
 
         def update_flatten_override(var, index, mode):
@@ -431,6 +484,27 @@ class SXBATCHER_gui(object):
             sxglobals.debug = c4_bool.get()
 
 
+        def update_share_cpus(var, index, mode):
+            sxglobals.share_cpus = core_count_bool.get()
+            try:
+                cores = core_count_int.get()
+            except Exception:
+                cores = 0
+
+            if cores < 0:
+                sxglobals.shared_cores = 0
+                core_count_int.set(0)
+            elif cores > sxglobals.num_cores:
+                sxglobals.shared_cores = sxglobals.num_cores
+                core_count_int.set(sxglobals.num_cores)
+            else:
+                sxglobals.shared_cores = cores
+
+
+        def update_use_distributed(var, index, mode):
+            sxglobals.use_distributed = use_distributed_bool.get()
+
+
         self.window = tk.Tk()
         self.window.title('SX Batcher')
 
@@ -438,11 +512,9 @@ class SXBATCHER_gui(object):
         self.tabs = ttk.Notebook(self.window)
         tab1 = ttk.Frame(self.tabs)
         tab2 = ttk.Frame(self.tabs)
-        tab3 = ttk.Frame(self.tabs)
 
         self.tabs.add(tab1, text='Catalogue')
         self.tabs.add(tab2, text='Settings')
-        self.tabs.add(tab3, text='Network')
         self.tabs.pack(expand = 1, fill ="both")
 
         # Content Tab ---------------------------------------------------------
@@ -511,7 +583,6 @@ class SXBATCHER_gui(object):
         button_add_selected.pack(pady=20)
 
 
-
         self.var_tag = tk.StringVar(self.window)
         tag_entry = tk.Entry(master=self.frame_b, textvariable=self.var_tag)
         tag_entry.pack()
@@ -522,10 +593,6 @@ class SXBATCHER_gui(object):
             height=3,
         )
         button_add_tagged.pack(pady=10)
-
-
-
-
 
 
         button_clear_exports = tk.Button(
@@ -599,6 +666,12 @@ class SXBATCHER_gui(object):
         e2_str=tk.StringVar(self.window)
         e3_str=tk.StringVar(self.window)
         e4_str=tk.StringVar(self.window)
+
+        e1_str.set(sxglobals.blender_path)
+        e2_str.set(sxglobals.sxtools_path)
+        e3_str.set(sxglobals.catalogue_path)
+        e4_str.set(sxglobals.export_path)
+
         e1_str.trace_add('write', update_blender_path)
         e2_str.trace_add('write', update_sxtools_path)
         e3_str.trace_add('write', update_catalogue_path)
@@ -613,16 +686,11 @@ class SXBATCHER_gui(object):
         e4 = tk.Entry(tab2, textvariable=e4_str, width=60)
         e4.grid(row=5, column=2)
 
-        e1_str.set(sxglobals.blender_path)
-        e2_str.set(sxglobals.sxtools_path)
-        e3_str.set(sxglobals.catalogue_path)
-        e4_str.set(sxglobals.export_path)
-
         l_empty = tk.Label(tab2, text=' ', width=10)
         l_empty.grid(row=1, column=3)
 
-        b2 = tk.Button(tab2, text='Save Settings')
-        b2.grid(row=1, column=4, padx=10, pady=10)
+        button_save_settings = tk.Button(tab2, text='Save Settings')
+        button_save_settings.grid(row=1, column=4, padx=10, pady=10)
 
         l_title2 = tk.Label(tab2, text='Overrides')
         l_title2.grid(row=6, column=1, padx=10, pady=10)
@@ -632,13 +700,22 @@ class SXBATCHER_gui(object):
         c3_bool = tk.BooleanVar(self.window)
         c4_bool = tk.BooleanVar(self.window)
         e5_str=tk.StringVar(self.window)
-        e6_str=tk.IntVar(self.window, value=0)
+        e6_int=tk.IntVar(self.window, value=0)
+
+        c1_bool.set(sxglobals.palette)
+        c2_bool.set(sxglobals.subdivision)
+        c3_bool.set(sxglobals.static_vertex_colors)
+        c4_bool.set(sxglobals.debug)
+        e5_str.set(sxglobals.palette_name)
+        e6_int.set(sxglobals.subdivision_count)
+
         c1_bool.trace_add('write', update_palette_override)
         c2_bool.trace_add('write', update_subdivision_override)
         c3_bool.trace_add('write', update_flatten_override)
         c4_bool.trace_add('write', update_debug_override)
         e5_str.trace_add('write', update_palette_override)
-        e6_str.trace_add('write', update_subdivision_override)
+        e6_int.trace_add('write', update_subdivision_override)
+
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=7, column=1, sticky='w', padx=10)
@@ -651,30 +728,41 @@ class SXBATCHER_gui(object):
 
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
         e5.grid(row=7, column=2, sticky='w')
-        e6 = tk.Entry(tab2, textvariable=e6_str, width=3, justify='left')
+        e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
         e6.grid(row=8, column=2, sticky='w')
 
-        # Network Tab ---------------------------------------------------------
-        l_title3 = tk.Label(tab3, text='Distributed Processing')
-        l_title3.grid(row=1, column=1, padx=10, pady=10)
+        # Event handling
+        button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
 
-        c5_bool = tk.BooleanVar(self.window)
-        c6_bool = tk.BooleanVar(self.window)
-        e7_int=tk.IntVar(self.window)
+        # Network
+        l_title3 = tk.Label(tab2, text='Distributed Processing')
+        l_title3.grid(row=11, column=1, padx=10, pady=10)
 
-        c5 = tk.Checkbutton(tab3, text='Share CPU Cores:', variable=c5_bool, justify='left', anchor='w')
-        c5.grid(row=2, column=1, sticky='w', padx=10)
-        c6 = tk.Checkbutton(tab3, text='Use Network Nodes', variable=c6_bool, justify='left', anchor='w')
-        c6.grid(row=3, column=1, sticky='w', padx=10)
+        core_count_bool = tk.BooleanVar(self.window)
+        use_distributed_bool = tk.BooleanVar(self.window)
+        core_count_int=tk.IntVar(self.window)
 
-        e7 = tk.Entry(tab3, textvariable=e7_int, width=3, justify='left')
-        e7.grid(row=2, column=2, sticky='w')
+        core_count_bool.set(sxglobals.share_cpus)
+        core_count_int.set(sxglobals.shared_cores)
+        use_distributed_bool.set(sxglobals.use_distributed)
 
-        l_title4 = tk.Label(tab3, text='Node Discovery')
-        l_title4.grid(row=4, column=1, padx=10, pady=10)
+        core_count_bool.trace_add('write', update_share_cpus)
+        use_distributed_bool.trace_add('write', update_use_distributed)
+        core_count_int.trace_add('write', update_share_cpus)
+
+        c5 = tk.Checkbutton(tab2, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
+        c5.grid(row=12, column=1, sticky='w', padx=10)
+        c6 = tk.Checkbutton(tab2, text='Use Network Nodes', variable=use_distributed_bool, justify='left', anchor='w')
+        c6.grid(row=13, column=1, sticky='w', padx=10)
+
+        e7 = tk.Entry(tab2, textvariable=core_count_int, width=3, justify='left')
+        e7.grid(row=12, column=2, sticky='w')
+
+        l_title4 = tk.Label(tab2, text='Node Discovery')
+        l_title4.grid(row=14, column=1, padx=10, pady=10)
 
 
-        def table(root, data, startrow, startcolumn):
+        def table_grid(root, data, startrow, startcolumn):
             rows = len(data)
             columns = len(data[0])
             for i in range(rows):
@@ -682,6 +770,15 @@ class SXBATCHER_gui(object):
                     self.e = tk.Entry(root)
                     self.e.grid(row=i+startrow, column=j+startcolumn)
                     self.e.insert('end', data[i][j])
+    
+        def table_label(root, data, startrow, startcolumn):
+            table = ''
+            for node in data:
+                for item in node:
+                    table = table + str(item) + '\t'
+                table = table + '\n'
+            self.lb = tk.Label(root, text=table)
+            self.lb.grid(row=startrow, column=startcolumn)
  
         # ip, hostname, cores, os
         data = [('192.168.0.100','doc','linux',32),
@@ -692,7 +789,8 @@ class SXBATCHER_gui(object):
             ('192.168.0.105','sneezy','mac',6),
             ('192.168.0.106','dopey','win',4)]
 
-        table(tab3, data, 5, 1)
+        table_label(tab2, data, 15, 2)
+
 
         self.window.mainloop()
 
@@ -715,5 +813,6 @@ if __name__ == '__main__':
     sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
     sxglobals.categories = list(sxglobals.catalogue.keys())
     sxglobals.category = sxglobals.categories[0]
+    sxglobals.num_cores = multiprocessing.cpu_count()
 
     gui.draw_window()

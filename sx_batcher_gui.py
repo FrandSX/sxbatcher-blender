@@ -297,6 +297,24 @@ class SXBATCHER_batch_process(object):
             for key, value in fields.items():
                 print('{}: {}'.format(key, value))
 
+class SXNodeBroadcastThread(threading.Thread):
+    def __init__(self, payload, group, port, timeout=5):
+        super().__init__()
+        self.stop_event = threading.Event()
+        self.payload = json.dumps(payload).encode('utf-8')
+        self.group = group
+        self.port = port
+        self.timeout = timeout
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+    def stop(self):
+        self.stop_event.set()
+        self.sock.close()
+    def run(self):
+        while not self.stop_event.wait(timeout=5):
+            self.sock.sendto(self.payload, (self.group, self.port))
+            if __debug__:
+                print("sent: {}".format(self.payload))
 
 # ------------------------------------------------------------------------
 #    GUI
@@ -320,6 +338,7 @@ class SXBATCHER_gui(object):
         self.button_batch = None
         self.progress_bar = None
         self.broadcast_process = None
+        self.broadcast_thread = None
         return None
 
 
@@ -531,18 +550,24 @@ class SXBATCHER_gui(object):
 
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
-            if self.broadcast_process is None:
+            if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
-                    self.network_broadcast_start()
-                    print('SX Batcher: Node broadcasting started')
+                    self.broadcast_thread = SXNodeBroadcastThread(self.payload(), sxglobals.group, sxglobals.port)
+                    self.broadcast_thread.start()
+                    if __debug__:
+                        print('SX Batcher: Node broadcasting started')
                 else:
                     pass
             else:
-                if sxglobals.share_cpus and not self.broadcast_process.is_alive():
-                    self.network_broadcast_start()
-                    print('SX Batcher: Node broadcasting started')
-                else:
-                    print('SX Batcher: Node broadcasting stopped')                    
+                if sxglobals.share_cpus and not self.broadcast_thread.is_alive():
+                    self.broadcast_thread = SXNodeBroadcastThread(self.payload(), sxglobals.group, sxglobals.port)
+                    self.broadcast_thread.start()
+                    if __debug__:
+                        print('SX Batcher: Node broadcasting restarted')
+                elif not sxglobals.share_cpus and self.broadcast_thread.is_alive():
+                    self.broadcast_thread.stop()
+                    if __debug__:
+                        print('SX Batcher: Node broadcasting stopped')                  
 
             try:
                 cores = core_count_int.get()
@@ -909,3 +934,4 @@ if __name__ == '__main__':
         sxglobals.category = sxglobals.categories[0]
 
     gui.draw_window()
+    gui.broadcast_thread.stop()

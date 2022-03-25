@@ -12,6 +12,7 @@ import platform
 import tkinter as tk
 from tkinter import MULTIPLE, ttk
 import getpass
+from tkinter import filedialog
 
 
 # ------------------------------------------------------------------------
@@ -107,29 +108,27 @@ class SXBATCHER_init(object):
 
 
     def save_conf(self):
-        if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
-            conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+        conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+        with open(conf_path, 'w') as output:
+            tempDict = {}
+            tempDict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
+            tempDict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
+            tempDict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
+            tempDict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
+            tempDict['debug'] = str(int(sxglobals.debug))
+            tempDict['palette'] = str(int(sxglobals.palette))
+            tempDict['palette_name'] = sxglobals.palette_name
+            tempDict['subdivision'] = str(int(sxglobals.subdivision))
+            tempDict['subdivision_count'] = str(sxglobals.subdivision_count)
+            tempDict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
+            tempDict['share_cpus'] = str(int(sxglobals.share_cpus))
+            tempDict['shared_cores'] = str(int(sxglobals.shared_cores))
+            tempDict['use_distributed'] = str(int(sxglobals.use_distributed))
 
-            with open(conf_path, 'w') as output:
-                tempDict = {}
-                tempDict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
-                tempDict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
-                tempDict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
-                tempDict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
-                tempDict['debug'] = str(int(sxglobals.debug))
-                tempDict['palette'] = str(int(sxglobals.palette))
-                tempDict['palette_name'] = sxglobals.palette_name
-                tempDict['subdivision'] = str(int(sxglobals.subdivision))
-                tempDict['subdivision_count'] = str(sxglobals.subdivision_count)
-                tempDict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
-                tempDict['share_cpus'] = str(int(sxglobals.share_cpus))
-                tempDict['shared_cores'] = str(int(sxglobals.shared_cores))
-                tempDict['use_distributed'] = str(int(sxglobals.use_distributed))
+            json.dump(tempDict, output, indent=4)
+            output.close()
 
-                json.dump(tempDict, output, indent=4)
-                output.close()
-
-            print('SX Batcher: ' + conf_path + ' saved')
+        print('SX Batcher: ' + conf_path + ' saved')
 
 
     def validate_paths(self):
@@ -584,6 +583,26 @@ class SXBATCHER_gui(object):
             self.lb.grid(row=startrow, column=startcolumn)
 
 
+        def browse_button_bp():
+            e1_str.set(filedialog.askopenfilename())
+            init.validate_paths()
+
+
+        def browse_button_sp():
+            e2_str.set(filedialog.askdirectory())
+            init.validate_paths()
+
+
+        def browse_button_cp():
+            e3_str.set(filedialog.askopenfilename())
+            init.validate_paths()
+
+
+        def browse_button_ep():
+            e4_str.set(filedialog.askdirectory())
+            init.validate_paths()
+
+
         self.window = tk.Tk()
         self.window.title('SX Batcher')
 
@@ -734,7 +753,7 @@ class SXBATCHER_gui(object):
         l_title1.grid(row=1, column=1, padx=10, pady=10)
         l1 = tk.Label(tab2, text='Blender Path:', width=20, justify='left', anchor='w')
         l1.grid(row=2, column=1, sticky='w', padx=10)
-        l2 = tk.Label(tab2, text='SX Tools Path:', width=20, justify='left', anchor='w')
+        l2 = tk.Label(tab2, text='SX Tools Library Path:', width=20, justify='left', anchor='w')
         l2.grid(row=3, column=1, sticky='w', padx=10)
         l3 = tk.Label(tab2, text='Catalogue Path:', width=20, justify='left', anchor='w')
         l3.grid(row=4, column=1, sticky='w', padx=10)
@@ -767,6 +786,15 @@ class SXBATCHER_gui(object):
 
         l_empty = tk.Label(tab2, text=' ', width=10)
         l_empty.grid(row=1, column=3)
+
+        button_browse_blenderpath = tk.Button(tab2, text='Browse', command=browse_button_bp)
+        button_browse_blenderpath.grid(row=2, column=3)
+        button_browse_sxtoolspath = tk.Button(tab2, text='Browse', command=browse_button_sp)
+        button_browse_sxtoolspath.grid(row=3, column=3)
+        button_browse_cataloguepath = tk.Button(tab2, text='Browse', command=browse_button_cp)
+        button_browse_cataloguepath.grid(row=4, column=3)
+        button_browse_exportpath = tk.Button(tab2, text='Browse', command=browse_button_ep)
+        button_browse_exportpath.grid(row=5, column=3)
 
         button_save_settings = tk.Button(tab2, text='Save Settings')
         button_save_settings.grid(row=1, column=4, padx=10, pady=10)

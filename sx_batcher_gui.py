@@ -266,20 +266,70 @@ class SXBATCHER_batch_process(object):
         print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
 
 
-    def node_broadcast_process(self, payload, group, port):
-        timeout = time.time() + 10
+# ------------------------------------------------------------------------
+#    Network Node Broadcasting
+# ------------------------------------------------------------------------
+class SXBATCHER_node_broadcast_thread(threading.Thread):
+    def __init__(self, payload, group, port, timeout=5):
+        super().__init__()
+        self.stop_event = threading.Event()
+        self.payload = json.dumps(payload).encode('utf-8')
+        self.group = group
+        self.port = port
+        self.timeout = timeout
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-        data = json.dumps(payload).encode('utf-8')
-        while time.time() < timeout:
-            sock.sendto(data, (group, port))
-            print("sent: {}".format(data))
-            time.sleep(3)
-        sock.close()
+
+    def stop(self):
+        self.stop_event.set()
+        self.sock.close()
 
 
-    def node_discover(self):
+    def run(self):
+        while not self.stop_event.wait(timeout=5):
+            self.sock.sendto(self.payload, (self.group, self.port))
+            if __debug__:
+                print("sent: {}".format(self.payload))
+
+
+# ------------------------------------------------------------------------
+#    Network Node Discovery
+# ------------------------------------------------------------------------
+class SXBATCHER_node_discovery_thread(threading.Thread):
+    def __init__(self, group, port, timeout=5):
+        super().__init__()
+        self.stop_event = threading.Event()
+        self.group = group
+        self.port = port
+        self.timeout = timeout
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        #sock.settimeout(0)
+        self.sock.bind(('', self.port))
+        packed = struct.pack('=4sl', socket.inet_aton(self.group), socket.INADDR_ANY)
+        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
+
+
+    def stop(self):
+        self.stop_event.set()
+        self.sock.close()
+
+
+    def run(self):
+        while not self.stop_event.wait(timeout=5):
+            try:
+                received, address = self.sock.recvfrom(1024)
+                fields = json.loads(received)
+            except TimeoutError:
+                received, address, fields = (None, None, None)
+            
+            print('--PACKET--')
+            for key, value in fields.items():
+                print('{}: {}'.format(key, value))
+
+
+    def boop(self):
         sock = socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         #sock.settimeout(0)
@@ -297,24 +347,6 @@ class SXBATCHER_batch_process(object):
             for key, value in fields.items():
                 print('{}: {}'.format(key, value))
 
-class SXNodeBroadcastThread(threading.Thread):
-    def __init__(self, payload, group, port, timeout=5):
-        super().__init__()
-        self.stop_event = threading.Event()
-        self.payload = json.dumps(payload).encode('utf-8')
-        self.group = group
-        self.port = port
-        self.timeout = timeout
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-    def stop(self):
-        self.stop_event.set()
-        self.sock.close()
-    def run(self):
-        while not self.stop_event.wait(timeout=5):
-            self.sock.sendto(self.payload, (self.group, self.port))
-            if __debug__:
-                print("sent: {}".format(self.payload))
 
 # ------------------------------------------------------------------------
 #    GUI
@@ -337,8 +369,8 @@ class SXBATCHER_gui(object):
         self.var_tag = None
         self.button_batch = None
         self.progress_bar = None
-        self.broadcast_process = None
         self.broadcast_thread = None
+        self.discovery_thread = None
         return None
 
 
@@ -434,25 +466,8 @@ class SXBATCHER_gui(object):
         }
 
 
-    def network_broadcast_start(self):
-        self.broadcast_process = threading.Thread(target=batch.node_broadcast_process, args=(self.payload(), sxglobals.group, sxglobals.port))
-        self.broadcast_process.start()
-        self.step_broadcast_check(self.broadcast_process)
-
-
     def handle_click_save_settings(self, event):
         init.save_conf()
-
-
-    def step_broadcast_check(self, t):
-        self.window.after(1000, self.check_broadcast_progress, t)
-
-
-    def check_broadcast_progress(self, t):
-        if not t.is_alive():
-            print('broadcast dööd')
-        else:
-            self.step_check(t)
 
 
     def step_check(self, t):
@@ -552,7 +567,7 @@ class SXBATCHER_gui(object):
             sxglobals.share_cpus = core_count_bool.get()
             if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
-                    self.broadcast_thread = SXNodeBroadcastThread(self.payload(), sxglobals.group, sxglobals.port)
+                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(self.payload(), sxglobals.group, sxglobals.port)
                     self.broadcast_thread.start()
                     if __debug__:
                         print('SX Batcher: Node broadcasting started')
@@ -560,7 +575,7 @@ class SXBATCHER_gui(object):
                     pass
             else:
                 if sxglobals.share_cpus and not self.broadcast_thread.is_alive():
-                    self.broadcast_thread = SXNodeBroadcastThread(self.payload(), sxglobals.group, sxglobals.port)
+                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(self.payload(), sxglobals.group, sxglobals.port)
                     self.broadcast_thread.start()
                     if __debug__:
                         print('SX Batcher: Node broadcasting restarted')
@@ -586,6 +601,24 @@ class SXBATCHER_gui(object):
 
         def update_use_distributed(var, index, mode):
             sxglobals.use_distributed = use_distributed_bool.get()
+            if self.discovery_thread is None:
+                if sxglobals.use_distributed:
+                    self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
+                    self.discovery_thread.start()
+                    if __debug__:
+                        print('SX Batcher: Node discovery started')
+                else:
+                    pass
+            else:
+                if sxglobals.use_distributed and not self.discovery_thread.is_alive():
+                    self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
+                    self.discovery_thread.start()
+                    if __debug__:
+                        print('SX Batcher: Node discovery restarted')
+                elif not sxglobals.use_distributed and self.discovery_thread.is_alive():
+                    self.discovery_thread.stop()
+                    if __debug__:
+                        print('SX Batcher: Node discovery stopped')       
 
 
         def table_grid(root, data, startrow, startcolumn):
@@ -903,7 +936,6 @@ class SXBATCHER_gui(object):
             ('192.168.0.106','dopey','win',4)]
 
         table_label(tab2, data, 15, 2)
-
 
         self.window.mainloop()
 

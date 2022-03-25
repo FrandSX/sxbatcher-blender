@@ -967,3 +967,4 @@ if __name__ == '__main__':
 
     gui.draw_window()
     gui.broadcast_thread.stop()
+    gui.discovery_thread.stop()

@@ -242,10 +242,6 @@ class SXBATCHER_batch_process(object):
                 sxglobals.debug))
 
 
-    def log_result(self, result):
-        pass
-
-
     def batch_spawner(self):
         tasks = sxglobals.tasks[:]
         source_files = sxglobals.source_files[:]
@@ -255,7 +251,6 @@ class SXBATCHER_batch_process(object):
         print(sxglobals.nodename + ': Spawning workers')
 
         with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            # for i, _ in enumerate(pool.apply_async(batch.sx_batch_process, tasks)):
             for i, _ in enumerate(pool.imap(batch.sx_batch_process, tasks)):
                 gui.progress_bar['value'] = round(i/len(tasks)*100)
                 # print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))

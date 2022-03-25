@@ -1,4 +1,3 @@
-from stringprep import c22_specials
 import threading
 import subprocess
 import multiprocessing
@@ -42,22 +41,12 @@ class SXBATCHER_globals(object):
         self.tasks = None
 
 
-    def __del__(self):
-        pass
-        # print('SX Batcher: Exiting sxglobals')
-
-
 # ------------------------------------------------------------------------
 #    Initialization and I/O
 # ------------------------------------------------------------------------
 class SXBATCHER_init(object):
     def __init__(self):
         return None
-
-
-    def __del__(self):
-        pass
-        # print('SX Batcher: Exiting init')
 
 
     def get_ip(self):
@@ -162,11 +151,6 @@ class SXBATCHER_init(object):
 class SXBATCHER_batch_process(object):
     def __init__(self):
         return None
-
-
-    def __del__(self):
-        pass
-        # print('SX Batcher: Exiting batch')
 
 
     def sx_batch_process(self, process_args):
@@ -280,6 +264,9 @@ class SXBATCHER_batch_process(object):
         print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
 
 
+# ------------------------------------------------------------------------
+#    GUI
+# ------------------------------------------------------------------------
 class SXBATCHER_gui(object):
     def __init__(self):
         self.window = None
@@ -299,11 +286,6 @@ class SXBATCHER_gui(object):
         self.button_batch = None
         self.progress_bar = None
         return None
-
-
-    def __del__(self):
-        pass
-        # print('SX Batcher: Exiting gui')
 
 
     def list_category(self, category, listbox):
@@ -503,6 +485,26 @@ class SXBATCHER_gui(object):
 
         def update_use_distributed(var, index, mode):
             sxglobals.use_distributed = use_distributed_bool.get()
+
+
+        def table_grid(root, data, startrow, startcolumn):
+            rows = len(data)
+            columns = len(data[0])
+            for i in range(rows):
+                for j in range(columns):
+                    self.e = tk.Entry(root)
+                    self.e.grid(row=i+startrow, column=j+startcolumn)
+                    self.e.insert('end', data[i][j])
+    
+
+        def table_label(root, data, startrow, startcolumn):
+            table = ''
+            for node in data:
+                for item in node:
+                    table = table + str(item) + '\t'
+                table = table + '\n'
+            self.lb = tk.Label(root, text=table)
+            self.lb.grid(row=startrow, column=startcolumn)
 
 
         self.window = tk.Tk()
@@ -760,25 +762,6 @@ class SXBATCHER_gui(object):
 
         l_title4 = tk.Label(tab2, text='Node Discovery')
         l_title4.grid(row=14, column=1, padx=10, pady=10)
-
-
-        def table_grid(root, data, startrow, startcolumn):
-            rows = len(data)
-            columns = len(data[0])
-            for i in range(rows):
-                for j in range(columns):
-                    self.e = tk.Entry(root)
-                    self.e.grid(row=i+startrow, column=j+startcolumn)
-                    self.e.insert('end', data[i][j])
-    
-        def table_label(root, data, startrow, startcolumn):
-            table = ''
-            for node in data:
-                for item in node:
-                    table = table + str(item) + '\t'
-                table = table + '\n'
-            self.lb = tk.Label(root, text=table)
-            self.lb.grid(row=startrow, column=startcolumn)
  
         # ip, hostname, cores, os
         data = [('192.168.0.100','doc','linux',32),

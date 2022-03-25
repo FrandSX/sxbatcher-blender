@@ -6,9 +6,12 @@ import json
 import socket
 import shutil
 from multiprocessing import Pool
+import struct
 import os
+import platform
 import tkinter as tk
 from tkinter import MULTIPLE, ttk
+import getpass
 
 
 # ------------------------------------------------------------------------
@@ -39,6 +42,9 @@ class SXBATCHER_globals(object):
         self.update_repo = False
         self.source_files = None
         self.tasks = None
+        self.group = '239.1.1.1'
+        self.port = 50000
+        self.magic = 'fna349fn'
 
 
 # ------------------------------------------------------------------------
@@ -251,12 +257,44 @@ class SXBATCHER_batch_process(object):
         print(sxglobals.nodename + ': Spawning workers')
 
         with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, _ in enumerate(pool.imap(batch.sx_batch_process, tasks)):
+            for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
                 gui.progress_bar['value'] = round(i/len(tasks)*100)
                 # print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
 
         now = time.time()
         print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+
+
+    def node_broadcast_process(self, payload, group, port):
+        timeout = time.time() + 10
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        data = json.dumps(payload).encode('utf-8')
+        while time.time() < timeout:
+            sock.sendto(data, (group, port))
+            print("sent: {}".format(data))
+            time.sleep(3)
+        sock.close()
+
+
+    def node_discover(self):
+        sock = socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        #sock.settimeout(0)
+        sock.bind(('', sxglobals.port))
+        packed = struct.pack('=4sl', socket.inet_aton(sxglobals.group), socket.INADDR_ANY)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
+        while True:
+            try:
+                received, address = sock.recvfrom(1024)
+                fields = json.loads(received)
+            except TimeoutError:
+                received, address, fields = (None, None, None)
+            
+            print('--PACKET--')
+            for key, value in fields.items():
+                print('{}: {}'.format(key, value))
 
 
 # ------------------------------------------------------------------------
@@ -280,6 +318,7 @@ class SXBATCHER_gui(object):
         self.var_tag = None
         self.button_batch = None
         self.progress_bar = None
+        self.broadcast_process = None
         return None
 
 
@@ -364,8 +403,36 @@ class SXBATCHER_gui(object):
             self.step_check(t)
 
 
+    def payload(self):
+        return {
+            "magic": sxglobals.magic,
+            "user": getpass.getuser(),
+            "host": socket.gethostname(),
+            "address": sxglobals.ip_addr,
+            "system": platform.system(),
+            "cores": sxglobals.shared_cores
+        }
+
+
+    def network_broadcast_start(self):
+        self.broadcast_process = threading.Thread(target=batch.node_broadcast_process, args=(self.payload(), sxglobals.group, sxglobals.port))
+        self.broadcast_process.start()
+        self.step_broadcast_check(self.broadcast_process)
+
+
     def handle_click_save_settings(self, event):
         init.save_conf()
+
+
+    def step_broadcast_check(self, t):
+        self.window.after(1000, self.check_broadcast_progress, t)
+
+
+    def check_broadcast_progress(self, t):
+        if not t.is_alive():
+            print('broadcast dööd')
+        else:
+            self.step_check(t)
 
 
     def step_check(self, t):
@@ -463,6 +530,19 @@ class SXBATCHER_gui(object):
 
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
+            if self.broadcast_process is None:
+                if sxglobals.share_cpus:
+                    self.network_broadcast_start()
+                    print('SX Batcher: Node broadcasting started')
+                else:
+                    pass
+            else:
+                if sxglobals.share_cpus and not self.broadcast_process.is_alive():
+                    self.network_broadcast_start()
+                    print('SX Batcher: Node broadcasting started')
+                else:
+                    print('SX Batcher: Node broadcasting stopped')                    
+
             try:
                 cores = core_count_int.get()
             except Exception:
@@ -786,11 +866,11 @@ batch = SXBATCHER_batch_process()
 if __name__ == '__main__':
     sxglobals.ip_addr = init.get_ip()
     sxglobals.nodename = 'Node '+sxglobals.ip_addr
+    sxglobals.num_cores = multiprocessing.cpu_count()
 
     init.load_conf()
     sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
     sxglobals.categories = list(sxglobals.catalogue.keys())
     sxglobals.category = sxglobals.categories[0]
-    sxglobals.num_cores = multiprocessing.cpu_count()
 
     gui.draw_window()

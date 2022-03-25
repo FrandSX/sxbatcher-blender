@@ -88,7 +88,6 @@ class SXBATCHER_init(object):
         if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
             conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
             conf = self.load_json(conf_path)
-            self.validate_paths()
 
         sxglobals.blender_path = conf.get('blender_path')
         sxglobals.catalogue_path = conf.get('catalogue_path')
@@ -103,6 +102,7 @@ class SXBATCHER_init(object):
         sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
         sxglobals.shared_cores = int(conf.get('shared_cores', 0))
         sxglobals.use_distributed = bool(int(conf.get('use_distributed', False)))
+        self.validate_paths()
 
 
 

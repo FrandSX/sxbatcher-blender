@@ -83,25 +83,27 @@ class SXBATCHER_init(object):
 
 
     def load_conf(self):
+        conf = {}
+    
         if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
             conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
-
             conf = self.load_json(conf_path)
-            sxglobals.blender_path = conf.get('blender_path')
-            sxglobals.catalogue_path = conf.get('catalogue_path')
-            sxglobals.export_path = conf.get('export_path')
-            sxglobals.sxtools_path = conf.get('sxtools_path')
-            sxglobals.debug = bool(int(conf.get('debug', False)))
-            sxglobals.palette = bool(int(conf.get('palette', False)))
-            sxglobals.palette_name = conf.get('palette_name', '')
-            sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
-            sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
-            sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
-            sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
-            sxglobals.shared_cores = int(conf.get('shared_cores', 0))
-            sxglobals.use_distributed = bool(int(conf.get('use_distributed', False)))
-
             self.validate_paths()
+
+        sxglobals.blender_path = conf.get('blender_path')
+        sxglobals.catalogue_path = conf.get('catalogue_path')
+        sxglobals.export_path = conf.get('export_path')
+        sxglobals.sxtools_path = conf.get('sxtools_path')
+        sxglobals.debug = bool(int(conf.get('debug', False)))
+        sxglobals.palette = bool(int(conf.get('palette', False)))
+        sxglobals.palette_name = conf.get('palette_name', '')
+        sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
+        sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
+        sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+        sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
+        sxglobals.shared_cores = int(conf.get('shared_cores', 0))
+        sxglobals.use_distributed = bool(int(conf.get('use_distributed', False)))
+
 
 
     def save_conf(self):
@@ -869,8 +871,13 @@ if __name__ == '__main__':
     sxglobals.num_cores = multiprocessing.cpu_count()
 
     init.load_conf()
-    sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-    sxglobals.categories = list(sxglobals.catalogue.keys())
-    sxglobals.category = sxglobals.categories[0]
+    if sxglobals.catalogue_path is None:
+        sxglobals.catalogue = {'empty': {'empty':['empty', ]}}
+        sxglobals.categories = ['empty',]
+        sxglobals.category = 'empty'
+    else:
+        sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+        sxglobals.categories = list(sxglobals.catalogue.keys())
+        sxglobals.category = sxglobals.categories[0]
 
     gui.draw_window()

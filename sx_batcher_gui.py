@@ -306,7 +306,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
         self.timeout = timeout
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #sock.settimeout(0)
+        self.sock.settimeout(5)
         self.sock.bind(('', self.port))
         packed = struct.pack('=4sl', socket.inet_aton(self.group), socket.INADDR_ANY)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
@@ -318,25 +318,20 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 
 
     def run(self):
-        while not self.stop_event.wait(timeout=5):
+        # while not self.stop_event.wait(timeout=5):
+        while not self.stop_event.is_set():
             try:
                 received, address = self.sock.recvfrom(1024)
                 fields = json.loads(received)
-            except TimeoutError:
+            except (TimeoutError, OSError):
                 received, address, fields = (None, None, None)
             
-            print('--PACKET--')
-            if None not in fields:
+            if fields is not None:
                 nodes = sxglobals.discovered_nodes
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
                 sxglobals.discovered_nodes = list(set(nodes))
-                print(sxglobals.discovered_nodes)
 
                 gui.table_nodes.configure(text=gui.update_table_string())
-
-            # for key, value in fields.items():
-            #     print('{}: {}'.format(key, value))
-            # print(sxglobals.discovered_nodes)
 
 
 # ------------------------------------------------------------------------
@@ -882,7 +877,7 @@ class SXBATCHER_gui(object):
         c2.grid(row=8, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
         c3.grid(row=9, column=1, sticky='w', padx=10)
-        c4 = tk.Checkbutton(tab2, text='Debug', variable=c4_bool, justify='left', anchor='w')
+        c4 = tk.Checkbutton(tab2, text='Blender Debug Output', variable=c4_bool, justify='left', anchor='w')
         c4.grid(row=10, column=1, sticky='w', padx=10)
 
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')

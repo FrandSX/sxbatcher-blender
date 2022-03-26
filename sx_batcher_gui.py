@@ -329,25 +329,6 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 print('{}: {}'.format(key, value))
 
 
-    def boop(self):
-        sock = socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #sock.settimeout(0)
-        sock.bind(('', sxglobals.port))
-        packed = struct.pack('=4sl', socket.inet_aton(sxglobals.group), socket.INADDR_ANY)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
-        while True:
-            try:
-                received, address = sock.recvfrom(1024)
-                fields = json.loads(received)
-            except TimeoutError:
-                received, address, fields = (None, None, None)
-            
-            print('--PACKET--')
-            for key, value in fields.items():
-                print('{}: {}'.format(key, value))
-
-
 # ------------------------------------------------------------------------
 #    GUI
 # ------------------------------------------------------------------------
@@ -443,7 +424,8 @@ class SXBATCHER_gui(object):
 
 
     def handle_click_start_batch(self, event):
-        if self.button_batch['state'] == 'normal':
+        print(self.button_batch['state'])
+        if (self.button_batch['state'] == 'normal') or (self.button_batch['state'] == 'active'):
             self.button_batch['state'] = 'disabled'
             sxglobals.export_objs = []
             self.button_batch.configure(text='Batch Running')
@@ -966,5 +948,8 @@ if __name__ == '__main__':
         sxglobals.category = sxglobals.categories[0]
 
     gui.draw_window()
-    gui.broadcast_thread.stop()
-    gui.discovery_thread.stop()
+
+    if gui.broadcast_thread is not None:
+        gui.broadcast_thread.stop()
+    if gui.discovery_thread is not None:
+        gui.discovery_thread.stop()

@@ -46,6 +46,15 @@ class SXBATCHER_globals(object):
         self.group = '239.1.1.1'
         self.port = 50000
         self.magic = 'fna349fn'
+        # ip, hostname, cores, os
+        self.discovered_nodes = [
+            ('192.168.0.100','doc','linux',32),
+            ('192.168.0.101','grumpy','win',16),
+            ('192.168.0.102','sleepy','mac',8),
+            ('192.168.0.103','bashful','linux',8),
+            ('192.168.0.104','happy','win',10),
+            ('192.168.0.105','sneezy','mac',6),
+            ('192.168.0.106','dopey','win',4)]
 
 
 # ------------------------------------------------------------------------
@@ -438,11 +447,11 @@ class SXBATCHER_gui(object):
 
 
     def payload(self):
+        # "user": getpass.getuser(),
         return {
             "magic": sxglobals.magic,
-            "user": getpass.getuser(),
-            "host": socket.gethostname(),
             "address": sxglobals.ip_addr,
+            "host": socket.gethostname(),
             "system": platform.system(),
             "cores": sxglobals.shared_cores
         }
@@ -908,16 +917,7 @@ class SXBATCHER_gui(object):
         l_title4 = tk.Label(tab2, text='Node Discovery')
         l_title4.grid(row=14, column=1, padx=10, pady=10)
  
-        # ip, hostname, cores, os
-        data = [('192.168.0.100','doc','linux',32),
-            ('192.168.0.101','grumpy','win',16),
-            ('192.168.0.102','sleepy','mac',8),
-            ('192.168.0.103','bashful','linux',8),
-            ('192.168.0.104','happy','win',10),
-            ('192.168.0.105','sneezy','mac',6),
-            ('192.168.0.106','dopey','win',4)]
-
-        table_label(tab2, data, 15, 2)
+        table_label(tab2, sxglobals.discovered_nodes, 15, 2)
 
         self.window.mainloop()
 

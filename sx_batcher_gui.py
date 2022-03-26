@@ -46,15 +46,7 @@ class SXBATCHER_globals(object):
         self.group = '239.1.1.1'
         self.port = 50000
         self.magic = 'fna349fn'
-        # ip, hostname, cores, os
-        self.discovered_nodes = [('IP Address', 'Host Name', 'OS', 'Cores'), ]
-        #     ('192.168.0.100','doc','linux',32),
-        #     ('192.168.0.101','grumpy','win',16),
-        #     ('192.168.0.102','sleepy','mac',8),
-        #     ('192.168.0.103','bashful','linux',8),
-        #     ('192.168.0.104','happy','win',10),
-        #     ('192.168.0.105','sneezy','mac',6),
-        #     ('192.168.0.106','dopey','win',4)]
+        self.discovered_nodes = []
 
 
 # ------------------------------------------------------------------------
@@ -338,8 +330,10 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 nodes = sxglobals.discovered_nodes
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
                 sxglobals.discovered_nodes = list(set(nodes))
+                print(sxglobals.discovered_nodes)
 
-                gui.update_table_string()
+                gui.table_nodes.configure(text=gui.update_table_string())
+
             # for key, value in fields.items():
             #     print('{}: {}'.format(key, value))
             # print(sxglobals.discovered_nodes)
@@ -366,6 +360,7 @@ class SXBATCHER_gui(object):
         self.var_tag = None
         self.button_batch = None
         self.progress_bar = None
+        self.table_nodes = None
         self.broadcast_thread = None
         self.discovery_thread = None
         return None
@@ -508,13 +503,14 @@ class SXBATCHER_gui(object):
 
 
     def update_table_string(self):
-        table_string = 'IP Address\tHost Name\tSystem\tCores'
+        # table_string = '\nIP Address\tHost\tSystem\tCores'
+        table_string = ''
         for node in sxglobals.discovered_nodes:
             for item in node:
                 table_string = table_string + str(item) + '\t'
             table_string = table_string + '\n'
 
-        gui.table_nodes.configure(text=table_string)
+        return table_string
 
 
     def draw_window(self):
@@ -922,10 +918,10 @@ class SXBATCHER_gui(object):
         e7.grid(row=12, column=2, sticky='w')
 
         l_title4 = tk.Label(tab2, text='Node Discovery')
-        l_title4.grid(row=14, column=1, padx=10, pady=10)
+        l_title4.grid(row=14, column=2, padx=10, pady=10)
 
         self.table_nodes = tk.Label(tab2, text=self.update_table_string())
-        self.table_nodes.grid(tab2, row=15, column=2)
+        self.table_nodes.grid(row=15, column=2)
 
         self.window.mainloop()
 

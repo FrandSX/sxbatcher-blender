@@ -47,14 +47,14 @@ class SXBATCHER_globals(object):
         self.port = 50000
         self.magic = 'fna349fn'
         # ip, hostname, cores, os
-        self.discovered_nodes = [
-            ('192.168.0.100','doc','linux',32),
-            ('192.168.0.101','grumpy','win',16),
-            ('192.168.0.102','sleepy','mac',8),
-            ('192.168.0.103','bashful','linux',8),
-            ('192.168.0.104','happy','win',10),
-            ('192.168.0.105','sneezy','mac',6),
-            ('192.168.0.106','dopey','win',4)]
+        self.discovered_nodes = [('IP Address', 'Host Name', 'OS', 'Cores'), ]
+        #     ('192.168.0.100','doc','linux',32),
+        #     ('192.168.0.101','grumpy','win',16),
+        #     ('192.168.0.102','sleepy','mac',8),
+        #     ('192.168.0.103','bashful','linux',8),
+        #     ('192.168.0.104','happy','win',10),
+        #     ('192.168.0.105','sneezy','mac',6),
+        #     ('192.168.0.106','dopey','win',4)]
 
 
 # ------------------------------------------------------------------------
@@ -334,8 +334,15 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 received, address, fields = (None, None, None)
             
             print('--PACKET--')
-            for key, value in fields.items():
-                print('{}: {}'.format(key, value))
+            if None not in fields:
+                nodes = sxglobals.discovered_nodes
+                nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
+                sxglobals.discovered_nodes = list(set(nodes))
+
+                gui.update_table_string()
+            # for key, value in fields.items():
+            #     print('{}: {}'.format(key, value))
+            # print(sxglobals.discovered_nodes)
 
 
 # ------------------------------------------------------------------------
@@ -500,6 +507,16 @@ class SXBATCHER_gui(object):
             self.button_batch['state'] = 'disabled'
 
 
+    def update_table_string(self):
+        table_string = 'IP Address\tHost Name\tSystem\tCores'
+        for node in sxglobals.discovered_nodes:
+            for item in node:
+                table_string = table_string + str(item) + '\t'
+            table_string = table_string + '\n'
+
+        gui.table_nodes.configure(text=table_string)
+
+
     def draw_window(self):
         def display_selected(choice):
             sxglobals.category = cat_var.get()
@@ -621,16 +638,6 @@ class SXBATCHER_gui(object):
                     self.e.grid(row=i+startrow, column=j+startcolumn)
                     self.e.insert('end', data[i][j])
     
-
-        def table_label(root, data, startrow, startcolumn):
-            table = ''
-            for node in data:
-                for item in node:
-                    table = table + str(item) + '\t'
-                table = table + '\n'
-            self.lb = tk.Label(root, text=table)
-            self.lb.grid(row=startrow, column=startcolumn)
-
 
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
@@ -916,8 +923,9 @@ class SXBATCHER_gui(object):
 
         l_title4 = tk.Label(tab2, text='Node Discovery')
         l_title4.grid(row=14, column=1, padx=10, pady=10)
- 
-        table_label(tab2, sxglobals.discovered_nodes, 15, 2)
+
+        self.table_nodes = tk.Label(tab2, text=self.update_table_string())
+        self.table_nodes.grid(tab2, row=15, column=2)
 
         self.window.mainloop()
 

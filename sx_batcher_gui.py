@@ -45,6 +45,7 @@ class SXBATCHER_globals(object):
         self.export_objs = None
         self.source_files = None
         self.source_costs = None
+        self.remote_assignment = None
 
         # Blender setting overrides
         self.debug = False
@@ -223,10 +224,16 @@ class SXBATCHER_batch_manager(object):
         if sxglobals.use_nodes:
             self.prepare_node_tasks()
         else:
-            tasks = self.prepare_local_tasks()
-            t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, ))
-            t.start()
-            gui.step_check(t)
+            if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
+                tasks = self.prepare_local_tasks()
+                t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
+                t.start()
+                gui.step_check(t)
+            else:
+                tasks = self.prepare_local_tasks()
+                t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
+                t.start()
+                gui.step_check(t)
 
 
     def get_source_assets(self):
@@ -240,7 +247,7 @@ class SXBATCHER_batch_manager(object):
         return source_assets
 
 
-    def prepare_local_tasks(self):
+    def prepare_local_tasks(self, local=True):
         # grab blender work script from the location of this script
         script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
         asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
@@ -254,7 +261,11 @@ class SXBATCHER_batch_manager(object):
             palette = sxglobals.palette_name
 
         # get asset paths from catalogue, map to file system locations, remove doubles
-        source_assets = self.get_source_assets()
+        if local:
+            source_assets = self.get_source_assets()
+        else:
+            source_assets = sxglobals.remote_assignment
+
         source_files = []
         for asset in source_assets:
             file_path = asset.replace('//', os.path.sep)
@@ -339,9 +350,7 @@ class SXBATCHER_batch_local(object):
             print('SX Batch Error:', source_file)
 
 
-    def worker_spawner(self, tasks):
-        num_cores = multiprocessing.cpu_count()
-
+    def worker_spawner(self, tasks, num_cores):
         then = time.time()
         print(sxglobals.nodename + ': Spawning workers')
 
@@ -1403,3 +1412,14 @@ if __name__ == '__main__':
         gui.broadcast_thread.stop()
     if gui.discovery_thread is not None:
         gui.discovery_thread.stop()
+
+
+# TODO:
+# - cost handling in task assignment
+# - listening to remote task assignments
+# - check for magic before parsing other node fields
+# - node selection (to use remote only)
+# - file collection
+# - file transfer for remote assets
+# - tmp folder location for remotely received source assets
+# - tmp folder location for remote task result files

@@ -59,6 +59,7 @@ class SXBATCHER_globals(object):
         self.group = '239.1.1.1'
         self.port = 50000
         self.magic = 'fna349fn'
+        self.magic_task = 'snaf68yh'
         self.nodes = []
         self.tasked_nodes = None
 
@@ -209,34 +210,36 @@ class SXBATCHER_batch_manager(object):
     # 1) Local-only batch processing assigned via GUI
     # 2) Distributed batch processing assigned via GUI
     # 3) Work batches assigned by a remote node
-    def task_handler(self):
+    def task_handler(self, remote_task=False):
         sxglobals.export_objs = []
         gui.label_progress.configure(text='Batch Running')
         for i in range(gui.lb_export.size()):
             sxglobals.export_objs.append(gui.lb_export.get(i))
 
-        if sxglobals.use_nodes:
-            # Send export lists to network nodes
-            node_tasks = self.prepare_node_tasks()
-            for key in node_tasks.keys():
-                payload = json.dumps(node_tasks[key]).encode('utf-8')
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-                addr = sxglobals.nodes[key][0]
-                port = sxglobals.port
-                sock.sendto(payload, (addr, port))
-                if __debug__:
-                    print("sent: {}".format(payload))
-                sock.close()
-        else:
+        if remote_task:
             # Receive export list from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
                 tasks = self.prepare_received_tasks()
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
                 t.start()
                 gui.step_check(t)
-            # Receive export list created in the UI
+        else:
+            if sxglobals.use_nodes:
+                # Send export lists to network nodes
+                node_tasks = self.prepare_node_tasks()
+                for key in node_tasks.keys():
+                    for value in node_tasks[key]:
+                        payload = json.dumps(value).encode('utf-8')
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+                        addr = sxglobals.nodes[key][0]
+                        port = sxglobals.port
+                        sock.sendto(payload, (addr, port))
+                        if __debug__:
+                            print("sent: {}".format(payload))
+                        sock.close()
             else:
+                # Receive export list created in the UI
                 tasks = self.prepare_local_tasks()
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
                 t.start()
@@ -308,15 +311,15 @@ class SXBATCHER_batch_manager(object):
         for remote_task in remote_tasks:
             subdivision_count = None
             palette_name = None
-            asset = remote_task[0]
-            subdivision = remote_task[1]
+            asset = remote_task['asset']
+            subdivision = remote_task['subdivision']
             if subdivision:
-                subdivision_count = str(remote_task[2])
-            palette = remote_task[3]
+                subdivision_count = str(remote_task['subdivision_count'])
+            palette = remote_task['palette']
             if palette:
-                palette_name = remote_task[4]
-            static_vertex_colors = remote_task[5]
-            debug = remote_task[6]
+                palette_name = remote_task['palette_name']
+            static_vertex_colors = remote_task['static_vertex_colors']
+            debug = remote_task['debug']
 
             # create results folder
             dir_name = 'batch_results'
@@ -351,7 +354,17 @@ class SXBATCHER_batch_manager(object):
         tasks = []
 
         for asset in source_assets:
-            tasks.append((asset, sxglobals.subdivision, sxglobals.subdivision_count, sxglobals.palette, sxglobals.palette_name, sxglobals.static_vertex_colors, sxglobals.debug))
+            tasks.append({
+                "magic": sxglobals.magic_task,
+                "asset": asset,
+                "subdivision": str(sxglobals.subdivision),
+                "subdivision_count": str(sxglobals.subdivision_count),
+                "palette": str(sxglobals.palette),
+                "palette_name": sxglobals.palette_name,
+                "static_vertex_colors": str(sxglobals.static_vertex_colors),
+                "debug": str(sxglobals.debug),
+                "batch_size": str(len(source_assets))
+            })
 
         # Divide tasks per node according to core counts
         workload = len(tasks)
@@ -360,12 +373,14 @@ class SXBATCHER_batch_manager(object):
             node_tasks[i] = []
 
         i = 0
-        while i <= workload:
+        while i < workload:
             for j, node in enumerate(sxglobals.nodes):
                 cores = node[3]
                 for k in range(cores):
-                    if (k+i) <= workload:
-                        node_tasks[j].append(tasks[k+i])
+                    if (k+i) < workload:
+                        task_list = node_tasks[j]
+                        task_list.append(tasks[k+i])
+                        node_tasks[j] = task_list
                     else:
                         break
                 i += k
@@ -769,12 +784,16 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
             except (TimeoutError, OSError):
                 received, address, fields = (None, None, None)
             
-            if fields is not None:
+            if (fields is not None) and (fields['magic'] == sxglobals.magic):
                 nodes = sxglobals.nodes
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
                 sxglobals.nodes = list(set(nodes))
-
                 gui.table_nodes.configure(text=gui.update_table_string())
+            elif sxglobals.share_cpus and (fields is not None) and (fields['magic'] == sxglobals.magic_task):
+                sxglobals.remote_assignment.append(fields)
+                if len(sxglobals.remote_assignment) == int(fields['batch_size']):
+                    print('ready to rock')
+                    manager.task_handler(remote_task=True)
 
 
 # ------------------------------------------------------------------------

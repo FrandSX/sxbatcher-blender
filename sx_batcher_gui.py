@@ -4,14 +4,11 @@ import multiprocessing
 import time
 import json
 import socket
-import shutil
-from multiprocessing import Pool
 import struct
 import os
 import platform
 import tkinter as tk
 from tkinter import MULTIPLE, ttk
-import getpass
 from tkinter import filedialog
 
 
@@ -20,33 +17,51 @@ from tkinter import filedialog
 # ------------------------------------------------------------------------
 class SXBATCHER_globals(object):
     def __init__(self):
+        # Main locations, validate if changed
         self.blender_path = None
         self.catalogue_path = None
         self.export_path = None
         self.sxtools_path = None
+        self.costs_path = None
+        self.asset_path = None
+
+
         self.num_cores = None
         self.share_cpus = None
         self.shared_cores = None
-        self.use_distributed = None
+        self.use_nodes = None
         self.ip_addr = None
         self.nodename = None
         self.catalogue = None
         self.categories = None
         self.category = None
+
+        self.update_repo = False # call all nodes to update their plastic repos
+        self.listonly = None # only show files that contain export objs
+        self.all = None # if full catalogue or all objects are to be exported
+        self.script_path = None
+
+        # Batch lists
+        self.export_objs = None
+        self.source_files = None
+        self.source_costs = None
+
+        # Blender setting overrides
         self.debug = False
         self.palette = False
         self.palette_name = None
         self.subdivision = False
         self.subdivision_count = None
         self.static_vertex_colors = False
-        self.export_objs = None
-        self.update_repo = False
-        self.source_files = None
-        self.tasks = None
+
+        # Network settings
         self.group = '239.1.1.1'
         self.port = 50000
         self.magic = 'fna349fn'
-        self.discovered_nodes = []
+        self.nodes = []
+        self.tasked_nodes = None
+
+        return None
 
 
 # ------------------------------------------------------------------------
@@ -54,6 +69,48 @@ class SXBATCHER_globals(object):
 # ------------------------------------------------------------------------
 class SXBATCHER_init(object):
     def __init__(self):
+        conf = self.load_conf()
+
+        sxglobals.blender_path = conf.get('blender_path')
+        sxglobals.catalogue_path = conf.get('catalogue_path')
+        sxglobals.export_path = conf.get('export_path')
+        sxglobals.sxtools_path = conf.get('sxtools_path')
+        sxglobals.debug = bool(int(conf.get('debug', False)))
+        sxglobals.palette = bool(int(conf.get('palette', False)))
+        sxglobals.palette_name = conf.get('palette_name', '')
+        sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
+        sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
+        sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+        sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
+        sxglobals.shared_cores = int(conf.get('shared_cores', 0))
+        sxglobals.use_nodes = bool(int(conf.get('use_nodes', False)))
+        self.validate_paths()
+
+        sxglobals.costs_path = sxglobals.catalogue_path.replace(os.path.basename(sxglobals.catalogue_path), 'sx_costs.json')
+        if os.path.isfile(sxglobals.costs_path):
+            sxglobals.source_costs = self.load_json(sxglobals.costs_path)
+
+        sxglobals.script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
+        sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+
+        sxglobals.ip_addr = self.get_ip()
+        sxglobals.nodename = 'Node '+sxglobals.ip_addr
+        sxglobals.num_cores = multiprocessing.cpu_count()
+
+        if sxglobals.catalogue_path is None:
+            sxglobals.catalogue = {'empty': {'empty':['empty', ]}}
+            sxglobals.categories = ['empty',]
+            sxglobals.category = 'empty'
+        else:
+            sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
+            sxglobals.categories = list(sxglobals.catalogue.keys())
+            sxglobals.category = sxglobals.categories[0]
+
+        # sxglobals.updaterepo = args.updaterepo
+        # sxglobals.all = args.all
+        # sxglobals.listonly = args.listonly
+        # sxglobals.benchmark = args.benchmark
+
         return None
 
 
@@ -77,11 +134,20 @@ class SXBATCHER_init(object):
                 input.close()
             return temp_dict
         except ValueError:
-            print(sxglobals.nodename + ' Error: Invalid JSON file.')
+            print(sxglobals.nodename + ' Error: Invalid JSON file. ' + file_path)
             return {}
         except IOError:
-            print(sxglobals.nodename + ' Error: File not found!')
+            print(sxglobals.nodename + ' Error: File not found! ' + file_path)
             return {}
+
+
+    def save_json(file_path, data):
+        with open(file_path, 'w') as output:
+            temp_dict = {}
+            temp_dict = data
+            json.dump(temp_dict, output, indent=4)
+
+            output.close()
 
 
     def load_conf(self):
@@ -91,44 +157,27 @@ class SXBATCHER_init(object):
             conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
             conf = self.load_json(conf_path)
 
-        sxglobals.blender_path = conf.get('blender_path')
-        sxglobals.catalogue_path = conf.get('catalogue_path')
-        sxglobals.export_path = conf.get('export_path')
-        sxglobals.sxtools_path = conf.get('sxtools_path')
-        sxglobals.debug = bool(int(conf.get('debug', False)))
-        sxglobals.palette = bool(int(conf.get('palette', False)))
-        sxglobals.palette_name = conf.get('palette_name', '')
-        sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
-        sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
-        sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
-        sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
-        sxglobals.shared_cores = int(conf.get('shared_cores', 0))
-        sxglobals.use_distributed = bool(int(conf.get('use_distributed', False)))
-        self.validate_paths()
-
+        return conf
 
 
     def save_conf(self):
         conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
-        with open(conf_path, 'w') as output:
-            tempDict = {}
-            tempDict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
-            tempDict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
-            tempDict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
-            tempDict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
-            tempDict['debug'] = str(int(sxglobals.debug))
-            tempDict['palette'] = str(int(sxglobals.palette))
-            tempDict['palette_name'] = sxglobals.palette_name
-            tempDict['subdivision'] = str(int(sxglobals.subdivision))
-            tempDict['subdivision_count'] = str(sxglobals.subdivision_count)
-            tempDict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
-            tempDict['share_cpus'] = str(int(sxglobals.share_cpus))
-            tempDict['shared_cores'] = str(int(sxglobals.shared_cores))
-            tempDict['use_distributed'] = str(int(sxglobals.use_distributed))
+        temp_dict = {}
+        temp_dict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
+        temp_dict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
+        temp_dict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
+        temp_dict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
+        temp_dict['debug'] = str(int(sxglobals.debug))
+        temp_dict['palette'] = str(int(sxglobals.palette))
+        temp_dict['palette_name'] = sxglobals.palette_name
+        temp_dict['subdivision'] = str(int(sxglobals.subdivision))
+        temp_dict['subdivision_count'] = str(sxglobals.subdivision_count)
+        temp_dict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
+        temp_dict['share_cpus'] = str(int(sxglobals.share_cpus))
+        temp_dict['shared_cores'] = str(int(sxglobals.shared_cores))
+        temp_dict['use_nodes'] = str(int(sxglobals.use_nodes))
 
-            json.dump(tempDict, output, indent=4)
-            output.close()
-
+        self.save_json(conf_path, temp_dict)
         print('SX Batcher: ' + conf_path + ' saved')
 
 
@@ -154,14 +203,98 @@ class SXBATCHER_init(object):
 
 
 # ------------------------------------------------------------------------
-#    Multiprocessing
+#    Batch Task Manager for Localhost and Nodes
 # ------------------------------------------------------------------------
-class SXBATCHER_batch_process(object):
+class SXBATCHER_batch_manager(object):
     def __init__(self):
         return None
 
 
-    def sx_batch_process(self, process_args):
+    # Handles task assignments:
+    # 1) Local-only batch processing assigned via GUI
+    # 2) Distributed batch processing assigned via GUI
+    # 3) Work batches assigned by a remote node
+    def task_handler(self):
+        sxglobals.export_objs = []
+        gui.button_batch.configure(text='Batch Running')
+        for i in range(gui.lb_export.size()):
+            sxglobals.export_objs.append(gui.lb_export.get(i))
+
+        if sxglobals.use_nodes:
+            self.prepare_node_tasks()
+        else:
+            tasks = self.prepare_local_tasks()
+            t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, ))
+            t.start()
+            gui.step_check(t)
+
+
+    def get_source_assets(self):
+        source_assets = []
+        for obj in sxglobals.export_objs:
+            for category in sxglobals.catalogue.keys():
+                for key, values in sxglobals.catalogue[category].items():
+                    for value in values:
+                        if obj == value:
+                            source_assets.append(key)
+        return source_assets
+
+
+    def prepare_local_tasks(self):
+        # grab blender work script from the location of this script
+        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
+        asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+        subdivision = None
+        palette = None
+
+        # check Blender overrides
+        if sxglobals.subdivision:
+            subdivision = str(sxglobals.subdivision_count)
+        if sxglobals.palette:
+            palette = sxglobals.palette_name
+
+        # get asset paths from catalogue, map to file system locations, remove doubles
+        source_assets = self.get_source_assets()
+        source_files = []
+        for asset in source_assets:
+            file_path = asset.replace('//', os.path.sep)
+            source_files.append(os.path.join(asset_path, file_path))
+        if len(source_files) > 0:
+            source_files = list(set(source_files))
+            print('\n' + sxglobals.nodename + ': Source files:')
+            for file in source_files:
+                print(file)
+
+        # Generate task definition for each local headless Blender
+        tasks = []
+        for file in source_files:
+            tasks.append(
+                (sxglobals.blender_path,
+                file,
+                script_path,
+                os.path.abspath(sxglobals.export_path),
+                os.path.abspath(sxglobals.sxtools_path),
+                subdivision,
+                palette,
+                sxglobals.static_vertex_colors,
+                sxglobals.debug))
+
+        return tasks
+
+
+    def prepare_node_tasks(self):
+        pass
+
+
+# ------------------------------------------------------------------------
+#    Local Multiprocessing
+# ------------------------------------------------------------------------
+class SXBATCHER_batch_local(object):
+    def __init__(self):
+        return None
+
+
+    def worker_process(self, process_args):
         blender_path = process_args[0]
         source_file = process_args[1]
         script_path = process_args[2]
@@ -206,65 +339,404 @@ class SXBATCHER_batch_process(object):
             print('SX Batch Error:', source_file)
 
 
-    def prepare_tasks(self):
-        # grab blender work script from the location of this script
-        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
-        sxglobals.source_files = []
-        sxglobals.tasks = []
-        subdivision = None
-        palette = None
-
-        if sxglobals.subdivision:
-            subdivision = str(sxglobals.subdivision_count)
-        if sxglobals.palette:
-            palette = sxglobals.palette_name
-
-        # Build source file list according to arguments
-        for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue.keys():
-                for key, values in sxglobals.catalogue[category].items():
-                    for value in values:
-                        if obj == value:
-                            file_path = key.replace('//', os.path.sep)
-                            sxglobals.source_files.append(os.path.join(asset_path, file_path))
-
-        # Construct node-specific task assignment list
-        if len(sxglobals.source_files) > 0:
-            sxglobals.source_files = list(set(sxglobals.source_files))
-            print('\n' + sxglobals.nodename + ': Source files:')
-            for file in sxglobals.source_files:
-                print(file)
-
-        # Generate task definition for each headless Blender
-        for file in sxglobals.source_files:
-            sxglobals.tasks.append(
-                (sxglobals.blender_path,
-                file,
-                script_path,
-                os.path.abspath(sxglobals.export_path),
-                os.path.abspath(sxglobals.sxtools_path),
-                subdivision,
-                palette,
-                sxglobals.static_vertex_colors,
-                sxglobals.debug))
-
-
-    def batch_spawner(self):
-        tasks = sxglobals.tasks[:]
-        source_files = sxglobals.source_files[:]
+    def worker_spawner(self, tasks):
         num_cores = multiprocessing.cpu_count()
 
         then = time.time()
         print(sxglobals.nodename + ': Spawning workers')
 
-        with Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, _ in enumerate(pool.imap(self.sx_batch_process, tasks)):
+        with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
+            for i, _ in enumerate(pool.imap(self.worker_process, tasks)):
                 gui.progress_bar['value'] = round(i/len(tasks)*100)
-                # print(sxglobals.nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
 
         now = time.time()
-        print(sxglobals.nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
+        print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(now-then, 2), 'seconds\n')
+
+
+# ------------------------------------------------------------------------
+#    Network Distributed Processing
+# ------------------------------------------------------------------------
+class SXBATCHER_batch_nodes(object):
+    def get_source_files(force_all=False):
+        source_files = []
+        asset_dict = {}
+
+        if sxglobals.all or force_all:
+            for category in asset_dict.keys():
+                for key in asset_dict[category].keys():
+                    source_files.append(key)
+        else:
+            if sxglobals.category is not None:
+                if sxglobals.category in asset_dict.keys():
+                    for key in asset_dict[sxglobals.category].keys():
+                        source_files.append(key)
+            if sxglobals.filename is not None:
+                for category in asset_dict.keys():
+                    for key in asset_dict[category].keys():
+                        if sxglobals.filename in key:
+                            source_files.append(key)
+            if sxglobals.tag is not None:
+                for category in asset_dict.keys():
+                    for key, values in asset_dict[category].items():
+                        for value in values:
+                            if sxglobals.tag == value:
+                                source_files.append(key)
+            if (sxglobals.category is None) and (sxglobals.filename is None) and (sxglobals.tag is None) and not sxglobals.updaterepo and not sxglobals.benchmark:
+                print('SX Node Manager: Nothing selected for export')
+
+        if len(source_files) > 0:
+            source_files = list(set(source_files))
+
+        return source_files
+
+
+    def update_costs(force_all=False):
+        def validation_check(file_paths, library):
+            for file in file_paths:
+                base = os.path.basename(file)
+                if base not in library:
+                    return False
+            return True
+
+        if force_all or not validation_check(sxglobals.source_files, sxglobals.source_costs.keys()):
+            tasks = []
+            benchmark_files = []
+
+            if force_all:
+                source_files = get_source_files(force_all=True)
+            else:
+                source_files = sxglobals.source_files
+
+            for file in source_files:
+                file_path = file.replace('//', os.path.sep)
+                benchmark_files.append(os.path.join(sxglobals.asset_path, file_path))
+
+            if not force_all:
+                for cost in sxglobals.source_costs.keys():
+                    filtered_sources = [file for file in benchmark_files if cost != os.path.basename(file)]
+                    benchmark_files = filtered_sources[:]
+
+            for file in benchmark_files:
+                tasks.append((sxglobals.blender_path, file, sxglobals.script_path, sxglobals.export_path, sxglobals.sxtools_path))
+
+            if force_all:
+                print('SX Manager: Calculating asset costs')
+            else:
+                print('SX Manager: Cost values missing, updating sx_costs.json')
+
+            results = multiprocessing.Array('d', [0.0]*len(benchmark_files))
+            with multiprocessing.Pool(processes=1, initializer=sx_init_benchmark, initargs=(results, tasks), maxtasksperchild=1) as costs_pool:
+                costs_pool.map(sx_benchmark, range(len(tasks)))
+
+            times = results[:]
+            for i, file in enumerate(benchmark_files):
+                sxglobals.source_costs[os.path.basename(file)] = times[i]
+                print(file, times[i])
+
+            save_json(sxglobals.costs_path, sxglobals.source_costs)
+
+
+    def sort_by_cost(source_files, cost_dict):
+        cost_list = list(cost_dict.items())
+        cost_list.sort(key = lambda x: x[1])
+
+        sorted_source = []
+        for cost in cost_list:
+            for file in source_files:
+                if cost[0] == os.path.basename(file):
+                    sorted_source.append(file)
+
+        return sorted_source
+
+
+    def sx_init_benchmark(result_array, task_array):
+        global results, tasks
+        results = result_array
+        tasks = task_array
+
+
+    def sx_init_batch(done, tasknodes, nodes, sourcefiles, sourcecosts, subdiv, pal, stat):
+        global processed, tasked_node_array
+        processed = done
+        tasked_node_array = tasknodes
+        sxglobals.nodes = nodes
+        sxglobals.source_files = sourcefiles
+        sxglobals.source_costs = sourcecosts
+        sxglobals.subdivision = subdiv
+        sxglobals.palette = pal
+        sxglobals.staticvertexcolors = stat
+
+
+    def sx_init_housekeeping(nodes, ep):
+        sxglobals.nodes = nodes
+        sxglobals.tasked_nodes = nodes
+        sxglobals.export_path = ep
+
+
+    def sx_benchmark(i):
+        blender_path = tasks[i][0]
+        source_file = tasks[i][1]
+        script_path = tasks[i][2]
+        export_path = tasks[i][3]
+        sxtools_path = tasks[i][4]
+        batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path, "--"]
+
+        if export_path is not None:
+            batch_args.extend(["-x", export_path])
+
+        if sxtools_path is not None:
+            batch_args.extend(["-l", sxtools_path])
+
+        then = time.time()
+
+        try:
+            p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
+        except subprocess.CalledProcessError as error:
+            print('SX Benchmark Error:', source_file)
+
+        now = time.time()
+        results[i] = round(now-then, 2)
+
+
+    # Task for updating a version-controlled asset folder (currently using PlasticSCM)
+    def sx_update(node):
+        if node['os'] == 'win':
+            upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
+        else:
+            upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
+
+        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], upd_cmd], text=True, capture_output=True)
+        print(p.stdout)
+
+
+    def sx_setup(node):
+        if node['os'] == 'win':
+            cmd = 'mkdir %userprofile%\sx_batch_temp'
+        else:
+            cmd = 'mkdir -p ~/sx_batch_temp'
+
+        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], capture_output=True)
+
+
+    def sx_batch(node):
+        total_cores = 0
+        node_idx = 0
+        for i, sx_node in enumerate(sxglobals.nodes):
+            total_cores += int(sx_node['numcores'])
+            if node == sx_node:
+                node_idx = i
+
+        job_length = len(sxglobals.source_files)
+        if processed.value < job_length:
+            numcores = int(node['numcores'])
+            work_amount = int(job_length * (numcores / float(total_cores)))
+            if work_amount < numcores:
+                work_amount = numcores
+            if job_length - (processed.value + work_amount) <= 3:
+                work_amount += (job_length - (processed.value + work_amount))
+            batch_files = sxglobals.source_files[processed.value:(processed.value + work_amount)]
+            processed.value = processed.value + work_amount
+
+            print('Node:', '(' + node['os'] + ')', node['ip'], '\tBatch Size:', len(batch_files), '\tCores:', numcores, '\tLog:', 'sx_export_log_' + node['ip'].replace('.', '') + '.txt')
+
+            if len(batch_files) > 0:
+                tasked_node_array[node_idx] = 1
+                if node['os'] == 'win':
+                    cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+                    cmd += ' -e %userprofile%\sx_batch_temp -r'
+                else:
+                    cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+                    cmd += ' -e ~/sx_batch_temp/ -r'
+                for file in batch_files:
+                    cmd += ' '+file
+                if sxglobals.subdivision is not None:
+                    cmd += ' -sd '+sxglobals.subdivision
+                if sxglobals.palette is not None:
+                    cmd += ' -sp '+sxglobals.palette
+                if sxglobals.staticvertexcolors:
+                    cmd += ' -st'
+
+                then = time.time()
+                with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
+                    p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
+                now = time.time()
+                print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
+
+
+    def sx_cost_batch(node):
+
+        def validate_lists(source_list, cost_list):
+            test_list = source_list[:]
+            for cost in cost_list:
+                for i, test in enumerate(test_list):
+                    if cost[0] == os.path.basename(test):
+                        test_list[i] = ''
+                        break
+
+            for test in test_list:
+                if test != '':
+                    print('SX Node Manager Error: Multiple instances in Catalogue', test)
+                    return False
+            else:
+                return True
+
+        # Examine job costs
+        total_cores = 0
+        node_idx = 0
+        for i, sx_node in enumerate(sxglobals.nodes):
+            total_cores += int(sx_node['numcores'])
+            if node == sx_node:
+                node_idx = i
+
+        cost_list = list(sxglobals.source_costs.items())
+        cost_list.sort(key = lambda x: x[1])
+        cost_list.reverse()
+
+        if validate_lists(sxglobals.source_files, cost_list):
+            total_cost = 0
+            for cost in cost_list:
+                total_cost += cost[1]
+
+            # Allocate (and adjust) work share bias
+            batch_dict = {}
+            work_shares = [0] * len(sxglobals.nodes)
+            start = 0
+            for j, sx_node in enumerate(sxglobals.nodes):
+                batch_files = []
+                numcores = int(sx_node['numcores'])
+                bias = 0
+                work_load = 0
+                work_share = total_cost * ((float(numcores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+
+                for k in range(start, len(sxglobals.source_files)):
+                    if (work_load + cost_list[k][1]) < work_share:
+                        batch_files.append(sxglobals.source_files[k])
+                        work_load += cost_list[k][1]
+                        start += 1
+                    elif j+1 == len(sxglobals.nodes):
+                        batch_files.append(sxglobals.source_files[k])
+                        work_load += cost_list[k][1]
+                        start += 1
+
+                batch_dict[j] = batch_files[:]
+                work_shares[j] = work_share
+
+            print('NodeID:', node_idx, '(' + node['os'] + ')', node['ip'], '\tWork Share:', str(round((work_shares[node_idx] / total_cost) * 100, 0))+'%', '(' + str(len(batch_dict[node_idx])) + ' files)', '\tCores:', node['numcores'], '\tLog:', 'sx_export_log_' + node['ip'].replace('.', '') + '.txt')
+
+            if len(batch_dict[node_idx]) > 0:
+                tasked_node_array[node_idx] = 1
+                if node['os'] == 'win':
+                    cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py'
+                    cmd += ' -e %userprofile%\sx_batch_temp -r'
+                else:
+                    cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py'
+                    cmd += ' -e ~/sx_batch_temp/ -r'
+                for file in batch_dict[node_idx]:
+                    cmd += ' '+file
+                if sxglobals.subdivision is not None:
+                    cmd += ' -sd '+sxglobals.subdivision
+                if sxglobals.palette is not None:
+                    cmd += ' -sp '+sxglobals.palette
+                if sxglobals.staticvertexcolors:
+                    cmd += ' -st'
+
+                then = time.time()
+                with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
+                    p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
+                now = time.time()
+                print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
+
+
+    def sx_collect(node):
+        if node['os'] == 'win':
+            collection_path = '%userprofile%\sx_batch_temp\*'
+        else:
+            collection_path = '~/sx_batch_temp/*'
+
+        p = subprocess.run(['scp', '-r', node['user']+'@'+node['ip']+':'+collection_path, sxglobals.export_path], text=True, capture_output=True)
+        print('SX Node Manager: Results collected from', node['ip'], 'to', sxglobals.export_path)
+
+
+    def sx_cleanup(node):
+        if node['os'] == 'win':
+            clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
+        else:
+            clean_cmd = 'rm -rf ~/sx_batch_temp'
+
+        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], clean_cmd], capture_output=True)
+
+
+    # ------------------------------------------------------------------------
+    #    NOTE: 1) The catalogue file should be located in the root
+    #          of your asset folder structure.
+    #
+    #          SX Node Manager expects sxbatcher-blender folder to be
+    #          located in user home folder. Adapt as necessary!
+    # ------------------------------------------------------------------------
+    def node_tasker(self):
+        sxglobals.source_files = get_source_files()
+
+        tasked_node_array = multiprocessing.Array('i', [0]*len(sxglobals.nodes))
+        processed = multiprocessing.Value('i', 0)
+
+        # Update or calculate asset costs if sx_costs.json is in use
+        if sxglobals.benchmark:
+            update_costs(force_all=True)
+
+        if (sxglobals.source_costs is not None) and not sxglobals.benchmark:
+            update_costs(force_all=False)
+            files_by_cost = sort_by_cost(sxglobals.source_files, sxglobals.source_costs)
+            sxglobals.source_files = files_by_cost[::-1]
+
+
+        # Display files that match the arguments
+        if sxglobals.listonly and len(sxglobals.source_files) > 0:
+            print('\nFound', len(sxglobals.source_files), 'source files:')
+            for file in sxglobals.source_files:
+                print(file)
+
+        # Network-distributed tasks
+        if len(sxglobals.nodes) > 0 and not sxglobals.benchmark:
+            if sxglobals.updaterepo:
+                print('\n'+'SX Node Manager: Updating Art Repositories')
+                with multiprocessing.Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.nodes, None), maxtasksperchild=1) as update_pool:
+                    update_pool.map(sx_update, sxglobals.nodes)
+
+            if not sxglobals.listonly and (len(sxglobals.source_files) > 0):
+                then = time.time()
+
+                # 1) Create temp folders
+                with multiprocessing.Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.nodes, None), maxtasksperchild=1) as setup_pool:
+                    setup_pool.map(sx_setup, sxglobals.nodes)
+
+                # 2) Process file batches
+                if sxglobals.source_costs is not None:
+                    print('\n'+'SX Node Manager: Assigning Tasks (cost-based method)')
+                    task_type = sx_cost_batch
+                else:
+                    print('\n'+'SX Node Manager: Assigning Tasks (default method)')
+                    task_type = sx_batch
+
+                with multiprocessing.Pool(processes=len(sxglobals.nodes), initializer=sx_init_batch, initargs=(processed, tasked_node_array, sxglobals.nodes, sxglobals.source_files, sxglobals.source_costs, sxglobals.subdivision, sxglobals.palette, sxglobals.staticvertexcolors), maxtasksperchild=1) as batch_pool:
+                    batch_pool.map(task_type, sxglobals.nodes)
+
+                # 3) Only collect from nodes that have been tasked
+                sxglobals.tasked_nodes = []
+                for i, node in enumerate(sxglobals.nodes):
+                    if tasked_node_array[i] == 1:
+                        sxglobals.tasked_nodes.append(node)
+
+                with multiprocessing.Pool(processes=len(sxglobals.tasked_nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, sxglobals.export_path), maxtasksperchild=1) as collect_pool:
+                    collect_pool.map(sx_collect, sxglobals.tasked_nodes)
+
+                # 4) Clean up nodes
+                with multiprocessing.Pool(processes=len(sxglobals.nodes), initializer=sx_init_housekeeping, initargs=(sxglobals.tasked_nodes, None), maxtasksperchild=1) as cleanup_pool:
+                    cleanup_pool.map(sx_cleanup, sxglobals.nodes)
+
+                now = time.time()
+                print('SX Node Manager: Export Finished!')
+                print('Duration:', round(now-then, 2), 'seconds')
+                print('Source Files Processed:', len(sxglobals.source_files))
 
 
 # ------------------------------------------------------------------------
@@ -327,9 +799,9 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 received, address, fields = (None, None, None)
             
             if fields is not None:
-                nodes = sxglobals.discovered_nodes
+                nodes = sxglobals.nodes
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
-                sxglobals.discovered_nodes = list(set(nodes))
+                sxglobals.nodes = list(set(nodes))
 
                 gui.table_nodes.configure(text=gui.update_table_string())
 
@@ -408,12 +880,11 @@ class SXBATCHER_gui(object):
 
 
     def handle_click_update_plastic(self, event):
-        if sxglobals.update_repo:
-            if os.name == 'nt':
-                subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', asset_path])
-            else:
-                subprocess.call(['/usr/local/bin/cm', 'update', asset_path])
-            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+        if os.name == 'nt':
+            subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', sxglobals.asset_path])
+        else:
+            subprocess.call(['/usr/local/bin/cm', 'update', sxglobals.asset_path])
+        sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
 
 
     def handle_click_listboxselect(self, event):
@@ -430,17 +901,10 @@ class SXBATCHER_gui(object):
 
 
     def handle_click_start_batch(self, event):
-        print(self.button_batch['state'])
         if (self.button_batch['state'] == 'normal') or (self.button_batch['state'] == 'active'):
             self.button_batch['state'] = 'disabled'
-            sxglobals.export_objs = []
-            self.button_batch.configure(text='Batch Running')
-            for i in range(self.lb_export.size()):
-                sxglobals.export_objs.append(self.lb_export.get(i))
-            batch.prepare_tasks()
-            t = threading.Thread(target=batch.batch_spawner)
-            t.start()
-            self.step_check(t)
+
+            manager.task_handler()
 
 
     def payload(self):
@@ -500,7 +964,7 @@ class SXBATCHER_gui(object):
     def update_table_string(self):
         # table_string = '\nIP Address\tHost\tSystem\tCores'
         table_string = ''
-        for node in sxglobals.discovered_nodes:
+        for node in sxglobals.nodes:
             for item in node:
                 table_string = table_string + str(item) + '\t'
             table_string = table_string + '\n'
@@ -598,10 +1062,10 @@ class SXBATCHER_gui(object):
                 sxglobals.shared_cores = cores
 
 
-        def update_use_distributed(var, index, mode):
-            sxglobals.use_distributed = use_distributed_bool.get()
+        def update_use_nodes(var, index, mode):
+            sxglobals.use_nodes = use_nodes_bool.get()
             if self.discovery_thread is None:
-                if sxglobals.use_distributed:
+                if sxglobals.use_nodes:
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
                     self.discovery_thread.start()
                     if __debug__:
@@ -609,12 +1073,12 @@ class SXBATCHER_gui(object):
                 else:
                     pass
             else:
-                if sxglobals.use_distributed and not self.discovery_thread.is_alive():
+                if sxglobals.use_nodes and not self.discovery_thread.is_alive():
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
                     self.discovery_thread.start()
                     if __debug__:
                         print('SX Batcher: Node discovery restarted')
-                elif not sxglobals.use_distributed and self.discovery_thread.is_alive():
+                elif not sxglobals.use_nodes and self.discovery_thread.is_alive():
                     self.discovery_thread.stop()
                     if __debug__:
                         print('SX Batcher: Node discovery stopped')       
@@ -756,7 +1220,7 @@ class SXBATCHER_gui(object):
 
 
         # Frame C
-        self.label_exports = tk.Label(master=self.frame_c, text='Batch Files:')
+        self.label_exports = tk.Label(master=self.frame_c, text='Batch Objects:')
         self.label_exports.pack(side='top', anchor='nw')
         self.frame_export_items = tk.Frame(master=self.frame_c)
         self.lb_export = tk.Listbox(master=self.frame_export_items, selectmode='multiple')
@@ -870,7 +1334,6 @@ class SXBATCHER_gui(object):
         e5_str.trace_add('write', update_palette_override)
         e6_int.trace_add('write', update_subdivision_override)
 
-
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=7, column=1, sticky='w', padx=10)
         c2 = tk.Checkbutton(tab2, text='Subdivision:', variable=c2_bool, justify='left', anchor='w')
@@ -893,20 +1356,20 @@ class SXBATCHER_gui(object):
         l_title3.grid(row=11, column=1, padx=10, pady=10)
 
         core_count_bool = tk.BooleanVar(self.window)
-        use_distributed_bool = tk.BooleanVar(self.window)
+        use_nodes_bool = tk.BooleanVar(self.window)
         core_count_int=tk.IntVar(self.window)
 
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)
-        use_distributed_bool.set(sxglobals.use_distributed)
+        use_nodes_bool.set(sxglobals.use_nodes)
 
         core_count_bool.trace_add('write', update_share_cpus)
-        use_distributed_bool.trace_add('write', update_use_distributed)
+        use_nodes_bool.trace_add('write', update_use_nodes)
         core_count_int.trace_add('write', update_share_cpus)
 
         c5 = tk.Checkbutton(tab2, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
         c5.grid(row=12, column=1, sticky='w', padx=10)
-        c6 = tk.Checkbutton(tab2, text='Use Network Nodes', variable=use_distributed_bool, justify='left', anchor='w')
+        c6 = tk.Checkbutton(tab2, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
         c6.grid(row=13, column=1, sticky='w', padx=10)
 
         e7 = tk.Entry(tab2, textvariable=core_count_int, width=3, justify='left')
@@ -929,23 +1392,11 @@ class SXBATCHER_gui(object):
 sxglobals = SXBATCHER_globals()
 init = SXBATCHER_init()
 gui = SXBATCHER_gui()
-batch = SXBATCHER_batch_process()
+manager = SXBATCHER_batch_manager()
+batch_local = SXBATCHER_batch_local()
+batch_nodes = SXBATCHER_batch_nodes()
 
 if __name__ == '__main__':
-    sxglobals.ip_addr = init.get_ip()
-    sxglobals.nodename = 'Node '+sxglobals.ip_addr
-    sxglobals.num_cores = multiprocessing.cpu_count()
-
-    init.load_conf()
-    if sxglobals.catalogue_path is None:
-        sxglobals.catalogue = {'empty': {'empty':['empty', ]}}
-        sxglobals.categories = ['empty',]
-        sxglobals.category = 'empty'
-    else:
-        sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-        sxglobals.categories = list(sxglobals.catalogue.keys())
-        sxglobals.category = sxglobals.categories[0]
-
     gui.draw_window()
 
     if gui.broadcast_thread is not None:

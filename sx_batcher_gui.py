@@ -45,7 +45,7 @@ class SXBATCHER_globals(object):
         self.export_objs = None
         self.source_files = None
         self.source_costs = None
-        self.remote_assignment = None
+        self.remote_assignment = []
 
         # Blender setting overrides
         self.debug = False
@@ -71,7 +71,6 @@ class SXBATCHER_globals(object):
 class SXBATCHER_init(object):
     def __init__(self):
         conf = self.load_conf()
-
         sxglobals.blender_path = conf.get('blender_path')
         sxglobals.catalogue_path = conf.get('catalogue_path')
         sxglobals.export_path = conf.get('export_path')
@@ -106,11 +105,6 @@ class SXBATCHER_init(object):
             sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
             sxglobals.categories = list(sxglobals.catalogue.keys())
             sxglobals.category = sxglobals.categories[0]
-
-        # sxglobals.updaterepo = args.updaterepo
-        # sxglobals.all = args.all
-        # sxglobals.listonly = args.listonly
-        # sxglobals.benchmark = args.benchmark
 
         return None
 
@@ -217,20 +211,22 @@ class SXBATCHER_batch_manager(object):
     # 3) Work batches assigned by a remote node
     def task_handler(self):
         sxglobals.export_objs = []
-        gui.button_batch.configure(text='Batch Running')
+        gui.label_progress.configure(text='Batch Running')
         for i in range(gui.lb_export.size()):
             sxglobals.export_objs.append(gui.lb_export.get(i))
 
         if sxglobals.use_nodes:
             self.prepare_node_tasks()
         else:
+            # Export file list received from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
-                tasks = self.prepare_local_tasks()
+                tasks = self.prepare_local_tasks(local=False)
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
                 t.start()
                 gui.step_check(t)
+            # Export list created in the UI
             else:
-                tasks = self.prepare_local_tasks()
+                tasks = self.prepare_local_tasks(local=True)
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
                 t.start()
                 gui.step_check(t)
@@ -263,8 +259,18 @@ class SXBATCHER_batch_manager(object):
         # get asset paths from catalogue, map to file system locations, remove doubles
         if local:
             source_assets = self.get_source_assets()
+            export_path = os.path.abspath(sxglobals.export_path)
         else:
             source_assets = sxglobals.remote_assignment
+
+            dir_name = 'batch_results'
+            if not os.path.exists(dir_name):
+                os.mkdir(dir_name)
+                print("Folder" , dir_name,  "created")
+            else:    
+                print("Folder" , dir_name,  "exists")
+
+            export_path = str(os.path.realpath(dir_name))
 
         source_files = []
         for asset in source_assets:
@@ -283,7 +289,7 @@ class SXBATCHER_batch_manager(object):
                 (sxglobals.blender_path,
                 file,
                 script_path,
-                os.path.abspath(sxglobals.export_path),
+                os.path.abspath(export_path),
                 os.path.abspath(sxglobals.sxtools_path),
                 subdivision,
                 palette,
@@ -836,6 +842,7 @@ class SXBATCHER_gui(object):
         self.var_tag = None
         self.button_batch = None
         self.progress_bar = None
+        self.label_progress = None
         self.table_nodes = None
         self.broadcast_thread = None
         self.discovery_thread = None
@@ -937,7 +944,7 @@ class SXBATCHER_gui(object):
 
     def check_progress(self, t):
         if not t.is_alive():
-            self.button_batch.configure(text='Start Batch')
+            self.label_progress.configure(text='Idle')
             self.button_batch['state'] = 'normal'
             self.progress_bar['value'] = 0
         else:
@@ -1224,8 +1231,11 @@ class SXBATCHER_gui(object):
         self.label_found_tags = tk.Label(master=self.frame_b, text='Tags in Selected:')
         self.label_found_tags.pack()
 
+        self.label_progress = tk.Label(master=self.frame_b, text='Idle')
+        self.label_progress.pack(side='bottom')
+
         self.progress_bar = ttk.Progressbar(master=self.frame_b, orient='horizontal', length=100, mode='determinate')
-        self.progress_bar.pack(side='bottom', anchor='s', pady=20, expand=True)
+        self.progress_bar.pack(side='bottom', anchor='s', pady=20)
 
 
         # Frame C
@@ -1422,4 +1432,4 @@ if __name__ == '__main__':
 # - file collection
 # - file transfer for remote assets
 # - tmp folder location for remotely received source assets
-# - tmp folder location for remote task result files
+# - tmp folder location for remote task result files (master-specific?)

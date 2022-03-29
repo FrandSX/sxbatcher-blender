@@ -439,6 +439,7 @@ class SXBATCHER_batch_local(object):
                     print(line)
                 else:
                     if 'Error' in line:
+                        print('SX Batch Error:', source_file)
                         print(line)
         except subprocess.CalledProcessError as error:
             print('SX Batch Error:', source_file)

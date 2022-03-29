@@ -25,7 +25,6 @@ class SXBATCHER_globals(object):
         self.costs_path = None
         self.asset_path = None
 
-
         self.num_cores = None
         self.share_cpus = None
         self.shared_cores = None
@@ -206,6 +205,22 @@ class SXBATCHER_batch_manager(object):
         return None
 
 
+    def get_source_assets(self):
+        source_assets = []
+        for obj in sxglobals.export_objs:
+            for category in sxglobals.catalogue.keys():
+                for filepath, obj_dict in sxglobals.catalogue[category].items():
+                    if obj in obj_dict['objects']:
+                        source_assets.append((filepath, int(obj_dict['cost'])))
+
+        source_assets = list(set(source_assets))
+        source_assets.sort(key = lambda x: x[1], reverse=True)
+        source_files = []
+        for asset in source_assets:
+            source_files.append(asset[0])
+        return source_files
+
+
     # Handles task assignments:
     # 1) Local-only batch processing assigned via GUI
     # 2) Distributed batch processing assigned via GUI
@@ -246,17 +261,6 @@ class SXBATCHER_batch_manager(object):
                 gui.step_check(t)
 
 
-    def get_source_assets(self):
-        source_assets = []
-        for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue.keys():
-                for key, values in sxglobals.catalogue[category].items():
-                    for value in values:
-                        if obj == value:
-                            source_assets.append(key)
-        return list(set(source_assets))
-
-
     def prepare_local_tasks(self):
         # grab blender work script from the location of this script
         script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
@@ -279,7 +283,6 @@ class SXBATCHER_batch_manager(object):
             file_path = asset.replace('//', os.path.sep)
             source_files.append(os.path.join(asset_path, file_path))
         if len(source_files) > 0:
-            source_files = list(set(source_files))
             print('\n' + sxglobals.nodename + ': Source files:')
             for file in source_files:
                 print(file)
@@ -458,112 +461,12 @@ class SXBATCHER_batch_local(object):
 # ------------------------------------------------------------------------
 class SXBATCHER_batch_nodes(object):
 
-    def update_costs(force_all=False):
-        def validation_check(file_paths, library):
-            for file in file_paths:
-                base = os.path.basename(file)
-                if base not in library:
-                    return False
-            return True
-
-        if force_all or not validation_check(sxglobals.source_files, sxglobals.source_costs.keys()):
-            tasks = []
-            benchmark_files = []
-
-            if force_all:
-                source_files = get_source_files(force_all=True)
-            else:
-                source_files = sxglobals.source_files
-
-            for file in source_files:
-                file_path = file.replace('//', os.path.sep)
-                benchmark_files.append(os.path.join(sxglobals.asset_path, file_path))
-
-            if not force_all:
-                for cost in sxglobals.source_costs.keys():
-                    filtered_sources = [file for file in benchmark_files if cost != os.path.basename(file)]
-                    benchmark_files = filtered_sources[:]
-
-            for file in benchmark_files:
-                tasks.append((sxglobals.blender_path, file, sxglobals.script_path, sxglobals.export_path, sxglobals.sxtools_path))
-
-            if force_all:
-                print('SX Manager: Calculating asset costs')
-            else:
-                print('SX Manager: Cost values missing, updating sx_costs.json')
-
-            results = multiprocessing.Array('d', [0.0]*len(benchmark_files))
-            with multiprocessing.Pool(processes=1, initializer=sx_init_benchmark, initargs=(results, tasks), maxtasksperchild=1) as costs_pool:
-                costs_pool.map(sx_benchmark, range(len(tasks)))
-
-            times = results[:]
-            for i, file in enumerate(benchmark_files):
-                sxglobals.source_costs[os.path.basename(file)] = times[i]
-                print(file, times[i])
-
-            save_json(sxglobals.costs_path, sxglobals.source_costs)
-
-
-    def sort_by_cost(source_files, cost_dict):
-        cost_list = list(cost_dict.items())
-        cost_list.sort(key = lambda x: x[1])
-
-        sorted_source = []
-        for cost in cost_list:
-            for file in source_files:
-                if cost[0] == os.path.basename(file):
-                    sorted_source.append(file)
-
-        return sorted_source
-
-
-    def sx_init_benchmark(result_array, task_array):
-        global results, tasks
-        results = result_array
-        tasks = task_array
-
-
-    def sx_init_batch(done, tasknodes, nodes, sourcefiles, sourcecosts, subdiv, pal, stat):
-        global processed, tasked_node_array
-        processed = done
-        tasked_node_array = tasknodes
-        sxglobals.nodes = nodes
-        sxglobals.source_files = sourcefiles
-        sxglobals.source_costs = sourcecosts
-        sxglobals.subdivision = subdiv
-        sxglobals.palette = pal
-        sxglobals.staticvertexcolors = stat
 
 
     def sx_init_housekeeping(nodes, ep):
         sxglobals.nodes = nodes
         sxglobals.tasked_nodes = nodes
         sxglobals.export_path = ep
-
-
-    def sx_benchmark(i):
-        blender_path = tasks[i][0]
-        source_file = tasks[i][1]
-        script_path = tasks[i][2]
-        export_path = tasks[i][3]
-        sxtools_path = tasks[i][4]
-        batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path, "--"]
-
-        if export_path is not None:
-            batch_args.extend(["-x", export_path])
-
-        if sxtools_path is not None:
-            batch_args.extend(["-l", sxtools_path])
-
-        then = time.time()
-
-        try:
-            p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
-        except subprocess.CalledProcessError as error:
-            print('SX Benchmark Error:', source_file)
-
-        now = time.time()
-        results[i] = round(now-then, 2)
 
 
     # Task for updating a version-controlled asset folder (currently using PlasticSCM)
@@ -826,11 +729,10 @@ class SXBATCHER_gui(object):
 
     def list_category(self, category, listbox):
         lb = listbox
-        item_dict = sxglobals.catalogue[category]
-        for tag_list in item_dict.values():
-            for tag in tag_list:
-                if tag.endswith('_root'):
-                    lb.insert('end', tag)
+        category = sxglobals.catalogue[category]
+        for obj_dict in category.values():
+            for obj_name in obj_dict['objects']:
+                lb.insert('end', obj_name)
         return lb
 
 
@@ -859,12 +761,10 @@ class SXBATCHER_gui(object):
     def handle_click_add_tagged(self, event):
         tag = self.var_tag.get()
         for category in sxglobals.catalogue.keys():
-            for key, values in sxglobals.catalogue[category].items():
-                for value in values:
-                    if tag == value:
-                        for value in values:
-                            if '_root' in value:
-                                self.lb_export.insert('end', value)
+            for obj_dict in sxglobals.catalogue[category].values():
+                if tag in obj_dict['tags']:
+                    for obj_name in obj_dict['objects']:
+                        self.lb_export.insert('end', obj_name)
 
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
@@ -882,11 +782,10 @@ class SXBATCHER_gui(object):
         tags = ''
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
         for obj in selected_item_list:
-            for key, values in sxglobals.catalogue[sxglobals.category].items():
-                if obj in values:
-                    for value in values:
-                        if '_root' not in value:
-                            tags = tags + value + ' '
+            for obj_dict in sxglobals.catalogue[sxglobals.category].values():
+                if obj in obj_dict['objects']:
+                    for tag in obj_dict['tags']:
+                        tags += tag + ' '
             tags = tags + '\n'
         self.label_found_tags.configure(text='Tags in Selected:\n\n'+tags)
 
@@ -1399,8 +1298,6 @@ if __name__ == '__main__':
 
 
 # TODO:
-# - cost handling in task assignment
-# - listening to remote task assignments
 # - check for magic before parsing other node fields
 # - node selection (to use remote only)
 # - file collection
@@ -1409,6 +1306,4 @@ if __name__ == '__main__':
 # - tmp folder location for remote task result files (master-specific?)
 # - network tab
 # - node status grid
-# - pass overrides to network nodes
-# - restore overrides after network job
-# - sort assets batches by poly count
+# - track and report failed objects

@@ -461,26 +461,6 @@ class SXBATCHER_batch_local(object):
 #    Network Distributed Processing
 # ------------------------------------------------------------------------
 class SXBATCHER_batch_nodes(object):
-
-
-
-    def sx_init_housekeeping(nodes, ep):
-        sxglobals.nodes = nodes
-        sxglobals.tasked_nodes = nodes
-        sxglobals.export_path = ep
-
-
-    # Task for updating a version-controlled asset folder (currently using PlasticSCM)
-    def sx_update(node):
-        if node['os'] == 'win':
-            upd_cmd = 'python %userprofile%\sxbatcher-blender\sx_batch_node.py -u'
-        else:
-            upd_cmd = 'python3 ~/sxbatcher-blender/sx_batch_node.py -u'
-
-        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], upd_cmd], text=True, capture_output=True)
-        print(p.stdout)
-
-
     def sx_batch(node):
         total_cores = 0
         node_idx = 0
@@ -608,25 +588,6 @@ class SXBATCHER_batch_nodes(object):
                     p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
                 now = time.time()
                 print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
-
-
-    def sx_collect(node):
-        if node['os'] == 'win':
-            collection_path = '%userprofile%\sx_batch_temp\*'
-        else:
-            collection_path = '~/sx_batch_temp/*'
-
-        p = subprocess.run(['scp', '-r', node['user']+'@'+node['ip']+':'+collection_path, sxglobals.export_path], text=True, capture_output=True)
-        print('SX Node Manager: Results collected from', node['ip'], 'to', sxglobals.export_path)
-
-
-    def sx_cleanup(node):
-        if node['os'] == 'win':
-            clean_cmd = 'rmdir /Q /S %userprofile%\sx_batch_temp'
-        else:
-            clean_cmd = 'rm -rf ~/sx_batch_temp'
-
-        p = subprocess.run(['ssh', node['user']+'@'+node['ip'], clean_cmd], capture_output=True)
 
 
 # ------------------------------------------------------------------------
@@ -1307,4 +1268,3 @@ if __name__ == '__main__':
 # - tmp folder location for remote task result files (master-specific?)
 # - network tab
 # - node status grid
-# - track and report failed objects

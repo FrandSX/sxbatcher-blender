@@ -136,7 +136,7 @@ class SXBATCHER_init(object):
             return {}
 
 
-    def save_json(file_path, data):
+    def save_json(self, file_path, data):
         with open(file_path, 'w') as output:
             temp_dict = {}
             temp_dict = data

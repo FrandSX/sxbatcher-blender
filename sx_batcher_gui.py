@@ -453,7 +453,7 @@ class SXBATCHER_batch_local(object):
                         print(line)
                         counter -= 1
         except subprocess.CalledProcessError as error:
-            print('heebies')
+            print('SX Batcher Error: Blender process crashed')
             return (source_file)
 
 

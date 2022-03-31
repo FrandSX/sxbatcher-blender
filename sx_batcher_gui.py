@@ -1362,3 +1362,6 @@ if __name__ == '__main__':
 # - tmp folder location for remote task result files (master-specific?)
 # - network tab
 # - node status grid
+# - only process changed revisions when full update requested
+#   - check if file exists, check revision
+# - revision file generation

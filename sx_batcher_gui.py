@@ -47,6 +47,7 @@ class SXBATCHER_globals(object):
         self.source_files = None
         self.source_costs = None
         self.remote_assignment = []
+        self.errors = []
 
         # Blender setting overrides
         self.debug = False
@@ -442,21 +443,26 @@ class SXBATCHER_batch_local(object):
                     print(line)
                 else:
                     if 'Error' in line:
-                        print('SX Batch Error:', source_file)
-                        print(line)
+                        return (source_file)
         except subprocess.CalledProcessError as error:
-            print('SX Batch Error:', source_file)
+            return (source_file)
 
 
     def worker_spawner(self, tasks, num_cores):
         print(sxglobals.nodename + ': Spawning workers')
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, _ in enumerate(pool.imap(self.worker_process, tasks)):
+            for i, error in enumerate(pool.imap(self.worker_process, tasks)):
                 gui.progress_bar['value'] = round(i/len(tasks)*100)
+                if error is not None:
+                    sxglobals.errors.append(error)
 
         sxglobals.now = time.time()
         print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(sxglobals.now-sxglobals.then, 2), 'seconds\n')
+        if len(sxglobals.errors) > 0:
+            print(sxglobals.nodename + ': Errors in:')
+            for file in sxglobals.errors:
+                print(file)
 
 
 # ------------------------------------------------------------------------
@@ -781,9 +787,17 @@ class SXBATCHER_gui(object):
 
     def check_progress(self, t):
         if not t.is_alive():
-            self.label_progress.configure(text=('Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'))
+            if len(sxglobals.errors) > 0:
+                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds\n'
+                label_string += 'Errors in:\n'
+                for file in sxglobals.errors:
+                    label_string += file+'\n'
+            else:
+                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
+            self.label_progress.configure(text=label_string)
             self.button_batch['state'] = 'normal'
             self.progress_bar['value'] = 0
+            sxglobals.errors = []
         else:
             self.step_check(t)
 

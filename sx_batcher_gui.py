@@ -4,6 +4,7 @@ import multiprocessing
 import time
 import json
 import socket
+import pathlib
 import struct
 import os
 import platform
@@ -469,6 +470,74 @@ class SXBATCHER_batch_local(object):
 #    Network Distributed Processing
 # ------------------------------------------------------------------------
 class SXBATCHER_batch_nodes(object):
+
+    def receive_files(self, address):
+        bufsize = 4096
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # bind to given address and wait
+            sock.bind(address)
+            sock.listen()
+            """ accept() returns a new socket 
+            for some unfathomable reason """
+            conn, addr = sock.accept()
+            print(f'[+] got connection {addr}')
+            metadata = json.loads(conn.recv(bufsize).decode('utf-8'))
+            
+            # directory to save in, change this
+            target_dir = pathlib.Path.home() / 'receivetest'
+            target_dir.mkdir(exist_ok=True)
+            
+            metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
+            print(f'[+] got file list:')
+            for fname in metadata.keys():
+                print(f'\t{fname}')
+            for file, size in metadata.items():
+                with open(target_dir / file, 'wb') as f:
+                    print(f'[+] writing into {file}...', end='')
+                    # check remaining data size is more than zero
+                    # read bufsize if there's more than bufsize left
+                    # else modulo
+                    left = size
+                    while left:
+                        quot, remain = divmod(left, bufsize)
+                        left -= f.write(conn.recv(bufsize if quot else remain))
+                        
+                    print(f' {f.tell()}/{size}')
+            conn.close()
+
+    # receive_files(('127.0.0.1', 5158))
+
+    def transfer_files(self, address, files):
+        bufsize = 4096
+        
+        # sizemap should be
+        # filename:size
+        # doesn't matter how you get there
+        # below is a placeholder
+        sizemap = { file.name:file.stat().st_size for file in files}
+        print(f'[+] files to be transferred:')
+        for file, size in sizemap.items():
+            print(f'\t{file}: {size}')
+        # open TCP socket in context manager
+        with socket.create_connection(address, timeout=60) as sock:
+            # send file:size json
+            sock.send(json.dumps(sizemap).encode('utf-8'))
+            time.sleep(0.1)
+            # for each file, read as binary and shove into socket
+            for file in files:
+                with open(file, 'rb') as f:
+                    print(f'[+] transfering {file}... ', end='')
+                    while chunk := f.read(bufsize):
+                        sock.send(chunk)
+                print('done')
+
+    # path = pathlib.Path('C:/Users/zephyrus/dummy_data')
+    # all files in folder
+    # for_transfer = [file for file in path.iterdir()]
+    # hit it
+    # transfer_files(('127.0.0.1', 5158), for_transfer)
+
+
     def sx_batch(node):
         total_cores = 0
         node_idx = 0

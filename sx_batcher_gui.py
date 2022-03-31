@@ -34,6 +34,8 @@ class SXBATCHER_globals(object):
         self.catalogue = None
         self.categories = None
         self.category = None
+        self.then = None
+        self.now = None
 
         self.update_repo = False # call all nodes to update their plastic repos
         self.listonly = None # only show files that contain export objs
@@ -227,7 +229,8 @@ class SXBATCHER_batch_manager(object):
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
         sxglobals.export_objs = []
-        gui.label_progress.configure(text='Batch Running')
+        gui.label_progress.configure(text='Job Running')
+        sxglobals.then = time.time()
         for i in range(gui.lb_export.size()):
             sxglobals.export_objs.append(gui.lb_export.get(i))
 
@@ -446,15 +449,14 @@ class SXBATCHER_batch_local(object):
 
 
     def worker_spawner(self, tasks, num_cores):
-        then = time.time()
         print(sxglobals.nodename + ': Spawning workers')
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, _ in enumerate(pool.imap(self.worker_process, tasks)):
                 gui.progress_bar['value'] = round(i/len(tasks)*100)
 
-        now = time.time()
-        print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(now-then, 2), 'seconds\n')
+        sxglobals.now = time.time()
+        print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(sxglobals.now-sxglobals.then, 2), 'seconds\n')
 
 
 # ------------------------------------------------------------------------
@@ -779,7 +781,7 @@ class SXBATCHER_gui(object):
 
     def check_progress(self, t):
         if not t.is_alive():
-            self.label_progress.configure(text='Idle')
+            self.label_progress.configure(text=('Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'))
             self.button_batch['state'] = 'normal'
             self.progress_bar['value'] = 0
         else:
@@ -800,6 +802,7 @@ class SXBATCHER_gui(object):
 
 
     def clear_lb_export(self, event):
+        self.label_progress.configure(text='Idle')
         self.lb_export.delete(0, 'end')
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()

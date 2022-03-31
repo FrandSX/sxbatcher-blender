@@ -439,13 +439,21 @@ class SXBATCHER_batch_local(object):
             p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
             # For debugging add "-d" to batch args and remove the keyword filter
             lines = p.stdout.splitlines()
+            counter = 0
             for line in lines:
                 if debug:
-                    print(line)
+                    if 'clnors' not in line:
+                        print(line)
                 else:
                     if 'Error' in line:
+                        counter = 10
+                        print(line)
                         return (source_file)
+                    if counter > 0:
+                        print(line)
+                        counter -= 1
         except subprocess.CalledProcessError as error:
+            print('heebies')
             return (source_file)
 
 

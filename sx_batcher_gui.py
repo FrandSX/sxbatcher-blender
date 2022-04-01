@@ -49,6 +49,7 @@ class SXBATCHER_globals(object):
         self.source_costs = None
         self.remote_assignment = []
         self.errors = []
+        self.revision_dict = {}
 
         # Blender setting overrides
         self.debug = False
@@ -145,7 +146,6 @@ class SXBATCHER_init(object):
             temp_dict = {}
             temp_dict = data
             json.dump(temp_dict, output, indent=4)
-
             output.close()
 
 
@@ -225,6 +225,29 @@ class SXBATCHER_batch_manager(object):
         return source_files
 
 
+    def get_source_revisions(self):
+        source_assets = []
+        for obj in sxglobals.export_objs:
+            for category in sxglobals.catalogue.keys():
+                for filepath, obj_dict in sxglobals.catalogue[category].items():
+                    if obj in obj_dict['objects']:
+                        source_assets.append((filepath, obj_dict.get('revision', str(0))))
+
+        source_assets = list(set(source_assets))
+        revision_dict = {}
+        for asset in source_assets:
+            revision_dict[asset[0]] = asset[1]
+        return revision_dict
+
+
+    def update_revisions(self):
+        file_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
+        file_dict = init.load_json(file_path)
+        data_dict = self.get_source_revisions()
+        file_dict.update(data_dict)
+        init.save_json(file_path, file_dict)
+
+
     # Handles task assignments:
     # 1) Local-only batch processing assigned via GUI
     # 2) Distributed batch processing assigned via GUI
@@ -273,7 +296,7 @@ class SXBATCHER_batch_manager(object):
         subdivision = None
         palette = None
 
-        # check Blender overrides
+        # check Blender override flags
         if sxglobals.subdivision:
             subdivision = str(sxglobals.subdivision_count)
         if sxglobals.palette:
@@ -871,6 +894,7 @@ class SXBATCHER_gui(object):
                     label_string += file+'\n'
             else:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
+            manager.update_revisions()
             self.label_progress.configure(text=label_string)
             self.button_batch['state'] = 'normal'
             self.progress_bar['value'] = 0

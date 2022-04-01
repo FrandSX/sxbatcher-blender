@@ -58,6 +58,7 @@ class SXBATCHER_globals(object):
         self.subdivision = False
         self.subdivision_count = None
         self.static_vertex_colors = False
+        self.revision_export = False
 
         # Network settings
         self.group = '239.1.1.1'
@@ -86,6 +87,7 @@ class SXBATCHER_init(object):
         sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
         sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
         sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+        sxglobals.revision_export = bool(int(conf.get('revision_export', False)))
         sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
         sxglobals.shared_cores = int(conf.get('shared_cores', 0))
         sxglobals.use_nodes = bool(int(conf.get('use_nodes', False)))
@@ -172,6 +174,7 @@ class SXBATCHER_init(object):
         temp_dict['subdivision'] = str(int(sxglobals.subdivision))
         temp_dict['subdivision_count'] = str(sxglobals.subdivision_count)
         temp_dict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
+        temp_dict['revision_export'] = str(int(sxglobals.revision_export))
         temp_dict['share_cpus'] = str(int(sxglobals.share_cpus))
         temp_dict['shared_cores'] = str(int(sxglobals.shared_cores))
         temp_dict['use_nodes'] = str(int(sxglobals.use_nodes))
@@ -209,15 +212,35 @@ class SXBATCHER_batch_manager(object):
         return None
 
 
-    def get_source_assets(self):
+    def get_source_assets(self, revisions_only=False):
+        revision_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
+        current_revisions = init.load_json(revision_path)
+        new_revisions = {}
+
         source_assets = []
         for obj in sxglobals.export_objs:
             for category in sxglobals.catalogue.keys():
-                for filepath, obj_dict in sxglobals.catalogue[category].items():
+                for asset, obj_dict in sxglobals.catalogue[category].items():
                     if obj in obj_dict['objects']:
-                        source_assets.append((filepath, int(obj_dict['cost'])))
+                        if revisions_only:
+                            print('here!')
+                            revision = obj_dict.get('revision', str(0))
+                            if (asset not in current_revisions.keys()):
+                                new_revisions[asset] = revision
+                                source_assets.append((asset, int(obj_dict['cost'])))
+                            elif (asset in current_revisions.keys()) and (int(current_revisions[asset]) < int(revision)):
+                                new_revisions[asset] = revision
+                                source_assets.append((asset, int(obj_dict['cost'])))
+                            else:
+                                print('SX Batcher: No changes in', asset)
+                        else:
+                            source_assets.append((asset, int(obj_dict['cost'])))
 
         source_assets = list(set(source_assets))
+
+        # current_revisions.update(new_revisions)
+        # init.save_json(revision_path, current_revisions)
+
         source_assets.sort(key = lambda x: x[1], reverse=True)
         source_files = []
         for asset in source_assets:
@@ -270,23 +293,25 @@ class SXBATCHER_batch_manager(object):
             if sxglobals.use_nodes:
                 # Send export lists to network nodes
                 node_tasks = self.prepare_node_tasks()
-                for key in node_tasks.keys():
-                    for value in node_tasks[key]:
-                        payload = json.dumps(value).encode('utf-8')
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-                        addr = sxglobals.nodes[key][0]
-                        port = sxglobals.port
-                        sock.sendto(payload, (addr, port))
-                        if __debug__:
-                            print("sent: {}".format(payload))
-                        sock.close()
+                if len(tasks) > 0:
+                    for key in node_tasks.keys():
+                        for value in node_tasks[key]:
+                            payload = json.dumps(value).encode('utf-8')
+                            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+                            addr = sxglobals.nodes[key][0]
+                            port = sxglobals.port
+                            sock.sendto(payload, (addr, port))
+                            if __debug__:
+                                print("sent: {}".format(payload))
+                            sock.close()
             else:
                 # Receive export list created in the UI
                 tasks = self.prepare_local_tasks()
-                t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
-                t.start()
-                gui.step_check(t)
+                if len(tasks) > 0:
+                    t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
+                    t.start()
+                    gui.step_check(t)
 
 
     def prepare_local_tasks(self):
@@ -303,7 +328,7 @@ class SXBATCHER_batch_manager(object):
             palette = sxglobals.palette_name
 
         # get asset paths from catalogue, map to file system locations, remove doubles
-        source_assets = self.get_source_assets()
+        source_assets = self.get_source_assets(sxglobals.revision_export)
         export_path = os.path.abspath(sxglobals.export_path)
 
         source_files = []
@@ -381,7 +406,7 @@ class SXBATCHER_batch_manager(object):
 
 
     def prepare_node_tasks(self):
-        source_assets = self.get_source_assets()
+        source_assets = self.get_source_assets(sxglobals.revision_export)
         tasks = []
 
         for asset in source_assets:
@@ -995,6 +1020,10 @@ class SXBATCHER_gui(object):
             sxglobals.debug = c4_bool.get()
 
 
+        def update_revision_export(var, index, mode):
+            sxglobals.revision_export = c5_bool.get()
+
+
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
             if self.broadcast_thread is None:
@@ -1289,6 +1318,7 @@ class SXBATCHER_gui(object):
         c2_bool = tk.BooleanVar(self.window)
         c3_bool = tk.BooleanVar(self.window)
         c4_bool = tk.BooleanVar(self.window)
+        c5_bool = tk.BooleanVar(self.window)
         e5_str=tk.StringVar(self.window)
         e6_int=tk.IntVar(self.window, value=0)
 
@@ -1296,6 +1326,7 @@ class SXBATCHER_gui(object):
         c2_bool.set(sxglobals.subdivision)
         c3_bool.set(sxglobals.static_vertex_colors)
         c4_bool.set(sxglobals.debug)
+        c5_bool.set(sxglobals.revision_export)
         e5_str.set(sxglobals.palette_name)
         e6_int.set(sxglobals.subdivision_count)
 
@@ -1303,6 +1334,7 @@ class SXBATCHER_gui(object):
         c2_bool.trace_add('write', update_subdivision_override)
         c3_bool.trace_add('write', update_flatten_override)
         c4_bool.trace_add('write', update_debug_override)
+        c5_bool.trace_add('write', update_revision_export)
         e5_str.trace_add('write', update_palette_override)
         e6_int.trace_add('write', update_subdivision_override)
 
@@ -1314,6 +1346,8 @@ class SXBATCHER_gui(object):
         c3.grid(row=9, column=1, sticky='w', padx=10)
         c4 = tk.Checkbutton(tab2, text='Blender Debug Output', variable=c4_bool, justify='left', anchor='w')
         c4.grid(row=10, column=1, sticky='w', padx=10)
+        c5 = tk.Checkbutton(tab2, text='Only Batch Changed Revisions', variable=c5_bool, justify='left', anchor='w')
+        c5.grid(row=11, column=1, sticky='w', padx=10)
 
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
         e5.grid(row=7, column=2, sticky='w')
@@ -1325,7 +1359,7 @@ class SXBATCHER_gui(object):
 
         # Network
         l_title3 = tk.Label(tab2, text='Distributed Processing')
-        l_title3.grid(row=11, column=1, padx=10, pady=10)
+        l_title3.grid(row=12, column=1, padx=10, pady=10)
 
         core_count_bool = tk.BooleanVar(self.window)
         use_nodes_bool = tk.BooleanVar(self.window)
@@ -1340,18 +1374,18 @@ class SXBATCHER_gui(object):
         core_count_int.trace_add('write', update_share_cpus)
 
         c5 = tk.Checkbutton(tab2, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
-        c5.grid(row=12, column=1, sticky='w', padx=10)
+        c5.grid(row=13, column=1, sticky='w', padx=10)
         c6 = tk.Checkbutton(tab2, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
-        c6.grid(row=13, column=1, sticky='w', padx=10)
+        c6.grid(row=14, column=1, sticky='w', padx=10)
 
         e7 = tk.Entry(tab2, textvariable=core_count_int, width=3, justify='left')
-        e7.grid(row=12, column=2, sticky='w')
+        e7.grid(row=13, column=2, sticky='w')
 
         l_title4 = tk.Label(tab2, text='Node Discovery')
-        l_title4.grid(row=14, column=2, padx=10, pady=10)
+        l_title4.grid(row=15, column=2, padx=10, pady=10)
 
         self.table_nodes = tk.Label(tab2, text=self.update_table_string())
-        self.table_nodes.grid(row=15, column=2)
+        self.table_nodes.grid(row=16, column=2)
 
         self.window.mainloop()
 

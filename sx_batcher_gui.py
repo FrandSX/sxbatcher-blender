@@ -223,7 +223,6 @@ class SXBATCHER_batch_manager(object):
                 for asset, obj_dict in sxglobals.catalogue[category].items():
                     if obj in obj_dict['objects']:
                         if revisions_only:
-                            print('here!')
                             revision = obj_dict.get('revision', str(0))
                             if (asset not in current_revisions.keys()):
                                 new_revisions[asset] = revision
@@ -312,6 +311,11 @@ class SXBATCHER_batch_manager(object):
                     t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
                     t.start()
                     gui.step_check(t)
+                else:
+                    gui.label_progress.configure(text='No Changes!')
+                    gui.button_batch['state'] = 'normal'
+                    gui.progress_bar['value'] = 0
+                    sxglobals.errors = []
 
 
     def prepare_local_tasks(self):

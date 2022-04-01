@@ -58,6 +58,7 @@ def get_args():
     parser.add_argument('-l', '--listonly', action='store_true', help='Do not export, only list objects that match the other arguments')
     parser.add_argument('-v', '--verbose', action='store_true', help='Display debug messages')
     parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
+    parser.add_argument('-re', '--revisionexport', action='store_true', help='Export changed revisions ')
     all_arguments, ignored = parser.parse_known_args()
     return all_arguments
 
@@ -75,6 +76,14 @@ def load_json(file_path):
     except IOError:
         print(nodename + ' Error: File not found!')
         return {}
+
+
+def save_json(file_path, data):
+    with open(file_path, 'w') as output:
+        temp_dict = {}
+        temp_dict = data
+        json.dump(temp_dict, output, indent=4)
+        output.close()
 
 
 def load_conf():
@@ -205,6 +214,24 @@ if __name__ == '__main__':
                     for key in asset_dict[category].keys():
                         file_path = key.replace('//', os.path.sep)
                         source_files.append(os.path.join(asset_path, file_path))
+            elif args.revisionexport:
+                revision_path = export_path + os.path.sep + 'file_revisions.json'
+                current_revisions = load_json(revision_path)
+                new_revisions = {}
+
+                for category in asset_dict.keys():
+                    for asset, obj_dict in asset_dict[category].items():
+                        revision = obj_dict.get('revision', str(0))
+                        new_revisions[asset] = revision
+                        if (asset not in current_revisions.keys()):
+                            file_path = asset.replace('//', os.path.sep)
+                            source_files.append(os.path.join(asset_path, file_path))
+                        elif (asset in current_revisions.keys()) and (int(current_revisions[asset]) < int(revision)):
+                            file_path = asset.replace('//', os.path.sep)
+                            source_files.append(os.path.join(asset_path, file_path))
+
+                current_revisions.update(new_revisions)
+                save_json(revision_path, current_revisions)
             else:
                 if args.category is not None:
                     if category in asset_dict.keys():
@@ -219,8 +246,8 @@ if __name__ == '__main__':
                                 source_files.append(os.path.join(asset_path, file_path))
                 if args.tag is not None:
                     for category in asset_dict.keys():
-                        for key, values in asset_dict[category].items():
-                            for value in values:
+                        for key, obj_dict in asset_dict[category].items():
+                            for value in obj_dict['tags']:
                                 if tag == value:
                                     file_path = key.replace('//', os.path.sep)
                                     source_files.append(os.path.join(asset_path, file_path))
@@ -253,4 +280,3 @@ if __name__ == '__main__':
 
             now = time.time()
             print(nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')
-

@@ -49,10 +49,7 @@ class SXBATCHER_globals(object):
         self.remote_assignment = []
         self.errors = []
         self.revision_dict = {}
-
-        # Blender setting overrides
-        self.debug = False
-        self.palette = False
+costs
         self.palette_name = None
         self.subdivision = False
         self.subdivision_count = None
@@ -94,7 +91,8 @@ class SXBATCHER_init(object):
         self.validate_paths()
 
         sxglobals.script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+        if sxglobals.catalogue_path is not None:
+            sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
 
         sxglobals.ip_addr = self.get_ip()
         sxglobals.nodename = 'Node '+sxglobals.ip_addr

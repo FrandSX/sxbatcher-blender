@@ -748,9 +748,9 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
             
             if (fields is not None) and (fields['magic'] == sxglobals.magic):
                 nodes = sxglobals.nodes
-                nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
+                nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                 sxglobals.nodes = list(set(nodes))
-                gui.table_nodes.configure(text=gui.update_table_string())
+                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
             elif sxglobals.share_cpus and (fields is not None) and (fields['magic'] == sxglobals.magic_task):
                 sxglobals.remote_assignment.append(fields)
                 if len(sxglobals.remote_assignment) == int(fields['batch_size']):
@@ -844,6 +844,7 @@ class SXBATCHER_gui(object):
     def __init__(self):
         self.window = None
         self.tabs = None
+        self.tab3 = None
         self.frame_a = None
         self.frame_b = None
         self.frame_c = None
@@ -943,8 +944,8 @@ class SXBATCHER_gui(object):
             "address": sxglobals.ip_addr,
             "host": socket.gethostname(),
             "system": platform.system(),
-            "cores": sxglobals.shared_cores,
-            "status": sxglobals.node_busy_status
+            "cores": str(sxglobals.shared_cores),
+            "status": "Busy" if sxglobals.node_busy_status else "Idle"
         }
 
 
@@ -1002,7 +1003,7 @@ class SXBATCHER_gui(object):
 
 
     def update_table_string(self):
-        # table_string = '\nIP Address\tHost\tSystem\tCores'
+        # table_string = '\nIP Address\tHost\tSystem\tCores\tStatus'
         table_string = ''
         for node in sxglobals.nodes:
             for item in node:
@@ -1010,6 +1011,27 @@ class SXBATCHER_gui(object):
             table_string = table_string + '\n'
 
         return table_string
+
+
+    def update_node_grid_data(self):
+        table_data = [['IP Address', 'Host Name', 'System', 'Cores', 'Status']]
+        for node in sxglobals.nodes:
+            node_row = []
+            for item in node:
+                node_row.append(item)
+            table_data.append(node_row)
+
+        return table_data
+
+
+    def table_grid(self, root, data, startrow, startcolumn):
+        rows = len(data)
+        columns = len(data[0])
+        for i in range(rows):
+            for j in range(columns):
+                self.e = tk.Entry(root)
+                self.e.grid(row=i+startrow, column=j+startcolumn)
+                self.e.insert('end', data[i][j])
 
 
     def draw_window(self):
@@ -1138,16 +1160,6 @@ class SXBATCHER_gui(object):
                         print('SX Batcher: Node discovery stopped')       
 
 
-        def table_grid(root, data, startrow, startcolumn):
-            rows = len(data)
-            columns = len(data[0])
-            for i in range(rows):
-                for j in range(columns):
-                    self.e = tk.Entry(root)
-                    self.e.grid(row=i+startrow, column=j+startcolumn)
-                    self.e.insert('end', data[i][j])
-    
-
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
             init.validate_paths()
@@ -1174,9 +1186,11 @@ class SXBATCHER_gui(object):
         self.tabs = ttk.Notebook(self.window)
         tab1 = ttk.Frame(self.tabs)
         tab2 = ttk.Frame(self.tabs)
+        self.tab3 = ttk.Frame(self.tabs)
 
         self.tabs.add(tab1, text='Catalogue')
         self.tabs.add(tab2, text='Settings')
+        self.tabs.add(self.tab3, text='Network')
         self.tabs.pack(expand = 1, fill ="both")
 
         # Content Tab ---------------------------------------------------------
@@ -1414,8 +1428,10 @@ class SXBATCHER_gui(object):
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
 
         # Network
-        l_title3 = tk.Label(tab2, text='Distributed Processing')
-        l_title3.grid(row=12, column=1, padx=10, pady=10)
+        l_title_pad = tk.Label(self.tab3, text=' ')
+        l_title_pad.grid(row=1, column=1, padx=10, pady=10)
+        l_title3 = tk.Label(self.tab3, text='Distributed Processing')
+        l_title3.grid(row=1, column=2, padx=10, pady=10)
 
         core_count_bool = tk.BooleanVar(self.window)
         use_nodes_bool = tk.BooleanVar(self.window)
@@ -1429,19 +1445,18 @@ class SXBATCHER_gui(object):
         use_nodes_bool.trace_add('write', update_use_nodes)
         core_count_int.trace_add('write', update_share_cpus)
 
-        c5 = tk.Checkbutton(tab2, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
-        c5.grid(row=13, column=1, sticky='w', padx=10)
-        c6 = tk.Checkbutton(tab2, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
-        c6.grid(row=14, column=1, sticky='w', padx=10)
+        c5 = tk.Checkbutton(self.tab3, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
+        c5.grid(row=2, column=2, sticky='w')
+        c6 = tk.Checkbutton(self.tab3, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
+        c6.grid(row=3, column=2, sticky='w')
 
-        e7 = tk.Entry(tab2, textvariable=core_count_int, width=3, justify='left')
-        e7.grid(row=13, column=2, sticky='w')
+        e7 = tk.Entry(self.tab3, textvariable=core_count_int, width=3, justify='left')
+        e7.grid(row=2, column=3, sticky='w')
 
-        l_title4 = tk.Label(tab2, text='Node Discovery')
-        l_title4.grid(row=15, column=2, padx=10, pady=10)
+        l_title5 = tk.Label(self.tab3, text='Node Discovery')
+        l_title5.grid(row=4, column=2, padx=10, pady=10)
 
-        self.table_nodes = tk.Label(tab2, text=self.update_table_string())
-        self.table_nodes.grid(row=16, column=2)
+        self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
 
         self.window.mainloop()
 
@@ -1474,8 +1489,3 @@ if __name__ == '__main__':
 # - file transfer for remote assets
 # - tmp folder location for remotely received source assets
 # - tmp folder location for remote task result files (master-specific?)
-# - network tab
-# - node status grid
-# - only process changed revisions when full update requested
-#   - check if file exists, check revision
-# - revision file generation

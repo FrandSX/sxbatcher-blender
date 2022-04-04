@@ -433,7 +433,7 @@ class SXBATCHER_batch_manager(object):
                 for k in range(cores):
                     if (k+i) < workload:
                         task_list = node_tasks[j]
-                        task_list.append(tasks[k+i])/usr/bin/blender
+                        task_list.append(tasks[k+i])
                         node_tasks[j] = task_list
                     else:
                         break

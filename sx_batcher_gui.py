@@ -49,7 +49,10 @@ class SXBATCHER_globals(object):
         self.remote_assignment = []
         self.errors = []
         self.revision_dict = {}
-costs
+
+        # Blender setting overrides
+        self.debug = False
+        self.palette = False
         self.palette_name = None
         self.subdivision = False
         self.subdivision_count = None

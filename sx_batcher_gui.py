@@ -135,8 +135,7 @@ class SXBATCHER_init(object):
         except ValueError:
             print(sxglobals.nodename + ' Error: Invalid JSON file. ' + file_path)
             return {}
-        except IOError:
-            print(sxglobals.nodename + ' Error: File not found! ' + file_path)
+        except IOError:load_asset_data
             return {}
 
 
@@ -167,7 +166,7 @@ class SXBATCHER_init(object):
         temp_dict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
         temp_dict['debug'] = str(int(sxglobals.debug))
         temp_dict['palette'] = str(int(sxglobals.palette))
-        temp_dict['palette_name'] = sxglobals.palette_name
+        temp_dict['palette_name'] = sxglobals.palette_nameload_asset_data
         temp_dict['subdivision'] = str(int(sxglobals.subdivision))
         temp_dict['subdivision_count'] = str(sxglobals.subdivision_count)
         temp_dict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
@@ -1032,6 +1031,7 @@ class SXBATCHER_gui(object):
 
         def update_catalogue_path(var, index, mode):
             sxglobals.catalogue_path = e3_str.get()
+            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
             self.toggle_batch_button()
 
 

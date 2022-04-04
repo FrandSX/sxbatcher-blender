@@ -102,7 +102,7 @@ class SXBATCHER_init(object):
         sxglobals.num_cores = multiprocessing.cpu_count()
 
         if sxglobals.catalogue_path is None:
-            sxglobals.catalogue = {'empty': {'empty':['empty', ]}}
+            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ]}}}
             sxglobals.categories = ['empty',]
             sxglobals.category = 'empty'
         else:

@@ -102,13 +102,11 @@ class SXBATCHER_init(object):
         sxglobals.num_cores = multiprocessing.cpu_count()
 
         if sxglobals.catalogue_path is None:
-            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ]}}}
-            sxglobals.categories = ['empty',]
-            sxglobals.category = 'empty'
+            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
         else:
             sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
-            sxglobals.categories = list(sxglobals.catalogue.keys())
-            sxglobals.category = sxglobals.categories[0]
+        sxglobals.categories = list(sxglobals.catalogue.keys())
+        sxglobals.category = sxglobals.categories[0]
 
         return None
 
@@ -197,7 +195,7 @@ class SXBATCHER_init(object):
             return self.load_json(catalogue_path)
         else:
             print(sxglobals.nodename + ': Invalid Catalogue path')
-            return {}
+            return {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
 
 
 # ------------------------------------------------------------------------
@@ -435,7 +433,7 @@ class SXBATCHER_batch_manager(object):
                 for k in range(cores):
                     if (k+i) < workload:
                         task_list = node_tasks[j]
-                        task_list.append(tasks[k+i])
+                        task_list.append(tasks[k+i])/usr/bin/blender
                         node_tasks[j] = task_list
                     else:
                         break
@@ -850,6 +848,8 @@ class SXBATCHER_gui(object):
         self.frame_b = None
         self.frame_c = None
         self.frame_items = None
+        self.cat_var = None
+        self.dropdown = None
         self.lb_items = None
         self.lb_export = None
         self.text_tags = None
@@ -1014,9 +1014,18 @@ class SXBATCHER_gui(object):
 
     def draw_window(self):
         def display_selected(choice):
-            sxglobals.category = cat_var.get()
+            sxglobals.category = self.cat_var.get()
             self.refresh_lb_items()
             self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
+
+
+        def refresh_catalogue_view():
+            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+            sxglobals.categories = list(sxglobals.catalogue.keys())
+            sxglobals.category = sxglobals.categories[0]
+            self.cat_var.set(sxglobals.category)
+            self.dropdown['values'] = sxglobals.categories
+            display_selected(self.cat_var.get())
 
 
         def update_blender_path(var, index, mode):
@@ -1031,7 +1040,7 @@ class SXBATCHER_gui(object):
 
         def update_catalogue_path(var, index, mode):
             sxglobals.catalogue_path = e3_str.get()
-            sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+            refresh_catalogue_view()
             self.toggle_batch_button()
 
 
@@ -1143,7 +1152,6 @@ class SXBATCHER_gui(object):
             e1_str.set(filedialog.askopenfilename())
             init.validate_paths()
 
-
         def browse_button_sp():
             e2_str.set(filedialog.askdirectory())
             init.validate_paths()
@@ -1179,16 +1187,15 @@ class SXBATCHER_gui(object):
         # Frame A
 
         # Category OptionMenu
-        cat_var = tk.StringVar()
-        cat_var.set(sxglobals.category)
+        self.cat_var = tk.StringVar()
+        self.cat_var.set(sxglobals.category)
 
-        dropdown = tk.OptionMenu(
-            self.frame_a,
-            cat_var,
-            *sxglobals.categories,
-            command=display_selected
-            )
-        dropdown.pack(side='top', anchor='nw', expand=False)
+        # refresh_catalogue_view()
+        # self.dropdown = tk.OptionMenu(self.frame_a, self.cat_var, *sxglobals.categories, command=display_selected)
+        self.dropdown = ttk.Combobox(self.frame_a, textvariable=self.cat_var)
+        self.dropdown['values'] = sxglobals.categories
+        self.dropdown['state'] = 'readonly'
+        self.dropdown.pack(side='top', anchor='nw', expand=False)
 
         # source object list
         self.frame_items = tk.Frame(master=self.frame_a)
@@ -1204,6 +1211,7 @@ class SXBATCHER_gui(object):
         self.var_item_count.set(self.lb_items.size())
         self.label_item_count = tk.Label(master=self.frame_a, text='Items: '+str(self.var_item_count.get()))
         self.label_item_count.pack()
+
         button_clear_selection = tk.Button(
             master = self.frame_a,
             text="Clear Selection",
@@ -1298,6 +1306,7 @@ class SXBATCHER_gui(object):
         self.frame_c.pack(side='left', fill='both', expand=True)
 
         # Event handling
+        self.dropdown.bind('<<ComboboxSelected>>', display_selected)
         self.lb_items.bind('<<ListboxSelect>>', self.handle_click_listboxselect)
         button_add_catalogue.bind('<Button-1>', self.handle_click_add_catalogue)
         button_add_category.bind('<Button-1>', self.handle_click_add_category)

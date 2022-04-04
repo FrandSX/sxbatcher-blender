@@ -23,13 +23,12 @@ class SXBATCHER_globals(object):
         self.catalogue_path = None
         self.export_path = None
         self.sxtools_path = None
-        self.costs_path = None
         self.asset_path = None
 
         self.num_cores = None
         self.share_cpus = None
         self.shared_cores = None
-        self.use_nodes = None
+        self.use_network_nodes = None
         self.ip_addr = None
         self.nodename = None
         self.catalogue = None
@@ -67,6 +66,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.nodes = []
         self.tasked_nodes = None
+        self.node_busy_status = False
 
         return None
 
@@ -90,12 +90,8 @@ class SXBATCHER_init(object):
         sxglobals.revision_export = bool(int(conf.get('revision_export', False)))
         sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
         sxglobals.shared_cores = int(conf.get('shared_cores', 0))
-        sxglobals.use_nodes = bool(int(conf.get('use_nodes', False)))
+        sxglobals.use_network_nodes = bool(int(conf.get('use_nodes', False)))
         self.validate_paths()
-
-        sxglobals.costs_path = sxglobals.catalogue_path.replace(os.path.basename(sxglobals.catalogue_path), 'sx_costs.json')
-        if os.path.isfile(sxglobals.costs_path):
-            sxglobals.source_costs = self.load_json(sxglobals.costs_path)
 
         sxglobals.script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
         sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
@@ -177,7 +173,7 @@ class SXBATCHER_init(object):
         temp_dict['revision_export'] = str(int(sxglobals.revision_export))
         temp_dict['share_cpus'] = str(int(sxglobals.share_cpus))
         temp_dict['shared_cores'] = str(int(sxglobals.shared_cores))
-        temp_dict['use_nodes'] = str(int(sxglobals.use_nodes))
+        temp_dict['use_nodes'] = str(int(sxglobals.use_network_nodes))
 
         self.save_json(conf_path, temp_dict)
         print('SX Batcher: ' + conf_path + ' saved')
@@ -282,15 +278,15 @@ class SXBATCHER_batch_manager(object):
             sxglobals.export_objs.append(gui.lb_export.get(i))
 
         if remote_task:
-            # Receive export list from network node
+            # Receive files to be processed from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
                 tasks = self.prepare_received_tasks()
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
                 t.start()
                 gui.step_check(t)
         else:
-            if sxglobals.use_nodes:
-                # Send export lists to network nodes
+            if sxglobals.use_network_nodes:
+                # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
                 if len(tasks) > 0:
                     for key in node_tasks.keys():
@@ -531,42 +527,6 @@ class SXBATCHER_batch_local(object):
 # ------------------------------------------------------------------------
 class SXBATCHER_batch_nodes(object):
 
-    def receive_files(self, address):
-        bufsize = 4096
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            # bind to given address and wait
-            sock.bind(address)
-            sock.listen()
-            """ accept() returns a new socket 
-            for some unfathomable reason """
-            conn, addr = sock.accept()
-            print(f'[+] got connection {addr}')
-            metadata = json.loads(conn.recv(bufsize).decode('utf-8'))
-            
-            # directory to save in, change this
-            target_dir = pathlib.Path.home() / 'receivetest'
-            target_dir.mkdir(exist_ok=True)
-            
-            metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
-            print(f'[+] got file list:')
-            for fname in metadata.keys():
-                print(f'\t{fname}')
-            for file, size in metadata.items():
-                with open(target_dir / file, 'wb') as f:
-                    print(f'[+] writing into {file}...', end='')
-                    # check remaining data size is more than zero
-                    # read bufsize if there's more than bufsize left
-                    # else modulo
-                    left = size
-                    while left:
-                        quot, remain = divmod(left, bufsize)
-                        left -= f.write(conn.recv(bufsize if quot else remain))
-                        
-                    print(f' {f.tell()}/{size}')
-            conn.close()
-
-    # receive_files(('127.0.0.1', 5158))
-
     def transfer_files(self, address, files):
         bufsize = 4096
         
@@ -729,6 +689,7 @@ class SXBATCHER_batch_nodes(object):
 
 # ------------------------------------------------------------------------
 #    Network Node Broadcasting
+#    Responsible for broadcasting availability of CPU resources
 # ------------------------------------------------------------------------
 class SXBATCHER_node_broadcast_thread(threading.Thread):
     def __init__(self, payload, group, port, timeout=5):
@@ -756,6 +717,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
 # ------------------------------------------------------------------------
 #    Network Node Discovery
+#    Runs on host, receives multicast broadcasts from available nodes
 # ------------------------------------------------------------------------
 class SXBATCHER_node_discovery_thread(threading.Thread):
     def __init__(self, group, port, timeout=5):
@@ -796,6 +758,85 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 if len(sxglobals.remote_assignment) == int(fields['batch_size']):
                     print('ready to rock')
                     manager.task_handler(remote_task=True)
+
+
+# ------------------------------------------------------------------------
+#    Network Node Task Listener
+#    Receives files for processing
+# ------------------------------------------------------------------------
+class SXBATCHER_node_file_listener(threading.Thread):
+    def __init__(self, group, port, timeout=5):
+        super().__init__()
+        self.stop_event = threading.Event()
+        self.group = group
+        self.port = port
+        self.timeout = timeout
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(5)
+        self.sock.bind(('', self.port))
+
+
+    def stop(self):
+        self.stop_event.set()
+        self.sock.close()
+
+
+    def run(self):
+        # while not self.stop_event.wait(timeout=5):
+        while not self.stop_event.is_set():
+            try:
+                received, address = self.sock.recvfrom(1024)
+                fields = json.loads(received)
+            except (TimeoutError, OSError):
+                received, address, fields = (None, None, None)
+            
+            if (fields is not None) and (fields['magic'] == sxglobals.magic):
+                nodes = sxglobals.nodes
+                nodes.append((fields['address'], fields['host'], fields['system'], fields['cores']))
+                sxglobals.nodes = list(set(nodes))
+                gui.table_nodes.configure(text=gui.update_table_string())
+            elif sxglobals.share_cpus and (fields is not None) and (fields['magic'] == sxglobals.magic_task):
+                sxglobals.remote_assignment.append(fields)
+                if len(sxglobals.remote_assignment) == int(fields['batch_size']):
+                    print('ready to rock')
+                    manager.task_handler(remote_task=True)
+
+
+    def receive_files(self, address):
+        bufsize = 4096
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # bind to given address and wait
+            sock.bind(address)
+            sock.listen()
+            """ accept() returns a new socket 
+            for some unfathomable reason """
+            conn, addr = sock.accept()
+            print(f'[+] got connection {addr}')
+            metadata = json.loads(conn.recv(bufsize).decode('utf-8'))
+            
+            # directory to save in, change this
+            target_dir = pathlib.Path.home() / 'receivetest'
+            target_dir.mkdir(exist_ok=True)
+            
+            metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
+            print(f'[+] got file list:')
+            for fname in metadata.keys():
+                print(f'\t{fname}')
+            for file, size in metadata.items():
+                with open(target_dir / file, 'wb') as f:
+                    print(f'[+] writing into {file}...', end='')
+                    # check remaining data size is more than zero
+                    # read bufsize if there's more than bufsize left
+                    # else modulo
+                    left = size
+                    while left:
+                        quot, remain = divmod(left, bufsize)
+                        left -= f.write(conn.recv(bufsize if quot else remain))
+                        
+                    print(f' {f.tell()}/{size}')
+            conn.close()
+
+    # receive_files(('127.0.0.1', 5158))
 
 
 # ------------------------------------------------------------------------
@@ -902,7 +943,8 @@ class SXBATCHER_gui(object):
             "address": sxglobals.ip_addr,
             "host": socket.gethostname(),
             "system": platform.system(),
-            "cores": sxglobals.shared_cores
+            "cores": sxglobals.shared_cores,
+            "status": sxglobals.node_busy_status
         }
 
 
@@ -1065,9 +1107,9 @@ class SXBATCHER_gui(object):
 
 
         def update_use_nodes(var, index, mode):
-            sxglobals.use_nodes = use_nodes_bool.get()
+            sxglobals.use_network_nodes = use_nodes_bool.get()
             if self.discovery_thread is None:
-                if sxglobals.use_nodes:
+                if sxglobals.use_network_nodes:
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
                     self.discovery_thread.start()
                     if __debug__:
@@ -1075,12 +1117,12 @@ class SXBATCHER_gui(object):
                 else:
                     pass
             else:
-                if sxglobals.use_nodes and not self.discovery_thread.is_alive():
+                if sxglobals.use_network_nodes and not self.discovery_thread.is_alive():
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.port)
                     self.discovery_thread.start()
                     if __debug__:
                         print('SX Batcher: Node discovery restarted')
-                elif not sxglobals.use_nodes and self.discovery_thread.is_alive():
+                elif not sxglobals.use_network_nodes and self.discovery_thread.is_alive():
                     self.discovery_thread.stop()
                     if __debug__:
                         print('SX Batcher: Node discovery stopped')       
@@ -1371,7 +1413,7 @@ class SXBATCHER_gui(object):
 
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)
-        use_nodes_bool.set(sxglobals.use_nodes)
+        use_nodes_bool.set(sxglobals.use_network_nodes)
 
         core_count_bool.trace_add('write', update_share_cpus)
         use_nodes_bool.trace_add('write', update_use_nodes)

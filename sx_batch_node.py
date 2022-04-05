@@ -271,12 +271,12 @@ if __name__ == '__main__':
         if not args.listonly and (len(source_files) != 0):
             num_cores = multiprocessing.cpu_count()
 
-            then = time.time()
+            then = time.perf_counter()
             print(nodename + ': Spawning workers')
 
             with Pool(processes=num_cores, maxtasksperchild=1) as pool:
                 for i, _ in enumerate(pool.imap(sx_process, tasks)):
                     print(nodename + ': Progress {0}%'.format(round(i/len(tasks)*100)))
 
-            now = time.time()
+            now = time.perf_counter()
             print(nodename + ':', len(source_files), 'files exported in', round(now-then, 2), 'seconds\n')

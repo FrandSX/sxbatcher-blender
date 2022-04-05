@@ -213,7 +213,7 @@ class SXBATCHER_batch_manager(object):
 
         source_assets = []
         for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue.keys():
+            for category in sxglobals.catalogue:
                 for asset, obj_dict in sxglobals.catalogue[category].items():
                     if obj in obj_dict['objects']:
                         if revisions_only:
@@ -244,7 +244,7 @@ class SXBATCHER_batch_manager(object):
     def get_source_revisions(self):
         source_assets = []
         for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue.keys():
+            for category in sxglobals.catalogue:
                 for filepath, obj_dict in sxglobals.catalogue[category].items():
                     if obj in obj_dict['objects']:
                         source_assets.append((filepath, obj_dict.get('revision', str(0))))
@@ -271,7 +271,7 @@ class SXBATCHER_batch_manager(object):
     def task_handler(self, remote_task=False):
         sxglobals.export_objs = []
         gui.label_progress.configure(text='Job Running')
-        sxglobals.then = time.time()
+        sxglobals.then = time.perf_counter()
         for i in range(gui.lb_export.size()):
             sxglobals.export_objs.append(gui.lb_export.get(i))
 
@@ -287,7 +287,7 @@ class SXBATCHER_batch_manager(object):
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
                 if len(tasks) > 0:
-                    for key in node_tasks.keys():
+                    for key in node_tasks:
                         for value in node_tasks[key]:
                             payload = json.dumps(value).encode('utf-8')
                             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -512,7 +512,7 @@ class SXBATCHER_batch_local(object):
                 if error is not None:
                     sxglobals.errors.append(error)
 
-        sxglobals.now = time.time()
+        sxglobals.now = time.perf_counter()
         print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(sxglobals.now-sxglobals.then, 2), 'seconds\n')
         if len(sxglobals.errors) > 0:
             print(sxglobals.nodename + ': Errors in:')
@@ -594,10 +594,10 @@ class SXBATCHER_batch_nodes(object):
                 if sxglobals.staticvertexcolors:
                     cmd += ' -st'
 
-                then = time.time()
+                then = time.perf_counter()
                 with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
                     p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
-                now = time.time()
+                now = time.perf_counter()
                 print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
 
 
@@ -678,10 +678,10 @@ class SXBATCHER_batch_nodes(object):
                 if sxglobals.staticvertexcolors:
                     cmd += ' -st'
 
-                then = time.time()
+                then = time.perf_counter()
                 with open('sx_export_log_' + node['ip'].replace('.', '') + '.txt', 'ab') as out:
                     p = subprocess.run(['ssh', node['user']+'@'+node['ip'], cmd], text=True, stdout=out, stderr=subprocess.STDOUT)
-                now = time.time()
+                now = time.perf_counter()
                 print('SX Node Manager:', node['ip'], 'completed in', round(now-then, 2), 'seconds')
 
 
@@ -818,7 +818,7 @@ class SXBATCHER_node_file_listener(threading.Thread):
             
             metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
             print(f'[+] got file list:')
-            for fname in metadata.keys():
+            for fname in metadata:
                 print(f'\t{fname}')
             for file, size in metadata.items():
                 with open(target_dir / file, 'wb') as f:
@@ -879,7 +879,7 @@ class SXBATCHER_gui(object):
 
     def handle_click_add_catalogue(self, event):
         self.lb_export.delete(0, 'end')
-        for category in sxglobals.catalogue.keys():
+        for category in sxglobals.catalogue:
             self.lb_export = self.list_category(category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
@@ -901,7 +901,7 @@ class SXBATCHER_gui(object):
 
     def handle_click_add_tagged(self, event):
         tag = self.var_tag.get()
-        for category in sxglobals.catalogue.keys():
+        for category in sxglobals.catalogue:
             for obj_dict in sxglobals.catalogue[category].values():
                 if tag in obj_dict['tags']:
                     for obj_name in obj_dict['objects']:

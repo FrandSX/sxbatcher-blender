@@ -1489,3 +1489,4 @@ if __name__ == '__main__':
 # - file transfer for remote assets
 # - tmp folder location for remotely received source assets
 # - tmp folder location for remote task result files (master-specific?)
+# - note revision changes in catalogue while running

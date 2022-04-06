@@ -211,6 +211,11 @@ class SXBATCHER_batch_manager(object):
         current_revisions = init.load_json(revision_path)
         new_revisions = {}
 
+        # Also update catalogue in case of new revisions
+        sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
+        sxglobals.categories = list(sxglobals.catalogue.keys())
+        sxglobals.category = sxglobals.categories[0]
+
         source_assets = []
         for obj in sxglobals.export_objs:
             for category in sxglobals.catalogue:

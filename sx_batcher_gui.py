@@ -132,7 +132,7 @@ class SXBATCHER_init(object):
                 input.close()
             return temp_dict
         except ValueError:
-            print(sxglobals.nodename + ' Error: Invalid JSON file. ' + file_path)
+            print(f'{sxglobals.nodename} Error: Invalid JSON file {file_path}')
             return {}
         except IOError:
             return {}
@@ -175,7 +175,7 @@ class SXBATCHER_init(object):
         temp_dict['use_nodes'] = str(int(sxglobals.use_network_nodes))
 
         self.save_json(conf_path, temp_dict)
-        print('SX Batcher: ' + conf_path + ' saved')
+        print(f'SX Batcher: {conf_path} saved')
 
 
     def validate_paths(self):
@@ -195,7 +195,7 @@ class SXBATCHER_init(object):
         if os.path.isfile(catalogue_path):
             return self.load_json(catalogue_path)
         else:
-            print(sxglobals.nodename + ': Invalid Catalogue path')
+            print(f'{sxglobals.nodename} Error: Invalid Catalogue path')
             return {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
 
 
@@ -210,7 +210,7 @@ class SXBATCHER_init(object):
         for file, size in sizemap.items():
             print(f'\t{file}: {size}')
         # open TCP socket in context manager
-        with socket.create_connection(address, timeout=60) as sock:
+        with socket.create_connection(address, timeout=20) as sock:
             # send file:size json
             sock.send(json.dumps(sizemap).encode('utf-8'))
             time.sleep(0.1)
@@ -298,7 +298,7 @@ class SXBATCHER_batch_manager(object):
                                 new_revisions[asset] = revision
                                 source_assets.append((asset, int(obj_dict['cost'])))
                             else:
-                                print('SX Batcher: No changes in', asset)
+                                print(f'SX Batcher: No changes in {asset}')
                         else:
                             source_assets.append((asset, int(obj_dict['cost'])))
 
@@ -426,7 +426,7 @@ class SXBATCHER_batch_manager(object):
             file_path = asset.replace('//', os.path.sep)
             source_files.append(os.path.join(asset_path, file_path))
         if len(source_files) > 0:
-            print('\n' + sxglobals.nodename + ': Source files:')
+            print(f'\n{sxglobals.nodename} source files:')
             for file in source_files:
                 print(file)
 
@@ -471,9 +471,9 @@ class SXBATCHER_batch_manager(object):
             dir_name = 'batch_results'
             if not os.path.exists(dir_name):
                 os.mkdir(dir_name)
-                print("Folder" , dir_name,  "created")
+                print(f'Folder {dir_name} created')
             else:    
-                print("Folder" , dir_name,  "exists")
+                print(f'Folder {dir_name} exists')
 
             export_path = str(os.path.realpath(dir_name))
 
@@ -598,7 +598,7 @@ class SXBATCHER_batch_local(object):
 
 
     def worker_spawner(self, tasks, num_cores):
-        print(sxglobals.nodename + ': Spawning workers')
+        print(f'{sxglobals.nodename} spawning workers')
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
@@ -607,9 +607,9 @@ class SXBATCHER_batch_local(object):
                     sxglobals.errors.append(error)
 
         sxglobals.now = time.perf_counter()
-        print(sxglobals.nodename + ':', len(sxglobals.export_objs), 'objects exported in', round(sxglobals.now-sxglobals.then, 2), 'seconds\n')
+        print(f'{sxglobals.nodename}: {len(sxglobals.export_objs)} objects exported in {sxglobals.now-sxglobals.then: .2f} seconds\n')
         if len(sxglobals.errors) > 0:
-            print(sxglobals.nodename + ': Errors in:')
+            print(f'{sxglobals.nodename}: Errors in:')
             for file in sxglobals.errors:
                 print(file)
 
@@ -817,7 +817,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
             elif sxglobals.share_cpus and (fields is not None) and (fields['magic'] == sxglobals.magic_task):
                 sxglobals.remote_assignment.append(fields)
                 if len(sxglobals.remote_assignment) == int(fields['batch_size']):
-                    print('Processing remotely assigned tasks')
+                    print('SX Batcher: Processing remotely assigned tasks')
                     manager.task_handler(remote_task=True)
 
 
@@ -857,9 +857,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 dir_name = 'batch_submissions'
                 if not os.path.exists(dir_name):
                     os.mkdir(dir_name)
-                    print("Folder" , dir_name,  "created")
+                    print(f'Folder {dir_name} created')
                 else:    
-                    print("Folder" , dir_name,  "exists")
+                    print(f'Folder {dir_name} exists')
 
                 target_dir = os.path.realpath('batch_submissions')
 
@@ -1539,13 +1539,13 @@ if __name__ == '__main__':
         gui.broadcast_thread.stop()
     if gui.discovery_thread is not None:
         gui.discovery_thread.stop()
+    if gui.file_receiving_thread is not None:
+        gui.file_receiving_thread.stop()
 
 
 # TODO:
 # - check for magic before parsing other node fields
 # - node selection (to use remote only)
+# - node status
 # - file collection
 # - file transfer for remote assets
-# - tmp folder location for remotely received source assets
-# - tmp folder location for remote task result files (master-specific?)
-# - note revision changes in catalogue while running

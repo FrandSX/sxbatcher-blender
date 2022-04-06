@@ -201,7 +201,6 @@ class SXBATCHER_init(object):
 
     def transfer_files(self, address, files):
         bufsize = 4096
-        print(files)
         # sizemap should be
         # filename:size
         # doesn't matter how you get there
@@ -343,6 +342,14 @@ class SXBATCHER_batch_manager(object):
     # 2) Distributed batch processing assigned via GUI
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
+
+        def reset_batch_button():
+            gui.label_progress.configure(text='No Changes!')
+            gui.button_batch['state'] = 'normal'
+            gui.progress_bar['value'] = 0
+            sxglobals.errors = []
+
+
         sxglobals.export_objs = []
         gui.label_progress.configure(text='Job Running')
         sxglobals.then = time.perf_counter()
@@ -356,6 +363,8 @@ class SXBATCHER_batch_manager(object):
                 t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
                 t.start()
                 gui.step_check(t)
+            else:
+                reset_batch_button()
         else:
             if sxglobals.use_network_nodes:
                 # Send files to be processed to network nodes
@@ -372,18 +381,18 @@ class SXBATCHER_batch_manager(object):
                             init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files)
 
                         # Send task list to node
-                    """
-                        for value in node_tasks[key]:
+                        for value in node_tasks[node_ip]:
                             payload = json.dumps(value).encode('utf-8')
                             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-                            addr = sxglobals.nodes[key][0]
+                            addr = node_ip
                             port = sxglobals.discovery_port
                             sock.sendto(payload, (addr, port))
                             if __debug__:
                                 print("sent: {}".format(payload))
                             sock.close()
-                    """
+                else:
+                    reset_batch_button()
             else:
                 # Receive export list created in the UI
                 tasks = self.prepare_local_tasks()
@@ -392,10 +401,7 @@ class SXBATCHER_batch_manager(object):
                     t.start()
                     gui.step_check(t)
                 else:
-                    gui.label_progress.configure(text='No Changes!')
-                    gui.button_batch['state'] = 'normal'
-                    gui.progress_bar['value'] = 0
-                    sxglobals.errors = []
+                    reset_batch_button()
 
 
     def prepare_local_tasks(self):
@@ -823,11 +829,11 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
         super().__init__()
         self.stop_event = threading.Event()
-        self.address = address
-        self.port = port
+        # self.address = address
+        # self.port = port
         self.bufsize = 4096
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.bind(('', self.port))
+        self.sock.bind((address, port))
 
 
     def stop(self):
@@ -862,9 +868,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 for fname in metadata:
                     print(f'\t{fname}')
                 for file, size in metadata.items():
-                    # with open(target_dir / file, 'wb') as f:
-                    print('writing:', str(os.path.join(target_dir, file)))
-                    with open(os.path.join(target_dir, file)) as f:
+                    with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
                         # check remaining data size is more than zero
                         # read bufsize if there's more than bufsize left
@@ -876,10 +880,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             
                         print(f' {f.tell()}/{size}')
                 conn.close()
-                print('dead dead dead')
 
-            except (OSError):
-                print('File listener failure!')
+            except OSError as error:
+                print(error)
 
 
 # ------------------------------------------------------------------------

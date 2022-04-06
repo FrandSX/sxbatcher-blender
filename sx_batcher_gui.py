@@ -201,12 +201,13 @@ class SXBATCHER_init(object):
 
     def transfer_files(self, address, files):
         bufsize = 4096
+        print('files:', files)
         # sizemap should be
         # filename:size
         # doesn't matter how you get there
         # below is a placeholder
-        sizemap = { file.name:file.stat().st_size for file in files}
-        print(f'[+] files to be transferred:')
+        sizemap = {file.name:file.stat().st_size for file in files}
+        print('[+] files to be transferred:')
         for file, size in sizemap.items():
             print(f'\t{file}: {size}')
         # open TCP socket in context manager
@@ -348,9 +349,11 @@ class SXBATCHER_batch_manager(object):
             gui.button_batch['state'] = 'normal'
             gui.progress_bar['value'] = 0
             sxglobals.errors = []
+            sxglobals.node_busy_status = False
 
 
         sxglobals.export_objs = []
+        sxglobals.node_busy_status = True
         gui.label_progress.configure(text='Job Running')
         sxglobals.then = time.perf_counter()
         for i in range(gui.lb_export.size()):
@@ -829,8 +832,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
         super().__init__()
         self.stop_event = threading.Event()
-        # self.address = address
-        # self.port = port
         self.bufsize = 4096
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
@@ -1020,6 +1021,7 @@ class SXBATCHER_gui(object):
             self.button_batch['state'] = 'normal'
             self.progress_bar['value'] = 0
             sxglobals.errors = []
+            sxglobals.node_busy_status = False
         else:
             self.step_check(t)
 

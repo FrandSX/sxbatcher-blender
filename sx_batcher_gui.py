@@ -395,10 +395,10 @@ class SXBATCHER_batch_manager(object):
                     for node_ip, task_list in node_tasks.items():
                         # Submit files to node
                         source_files = []
-                        for task in task_list:
+                        for i, task in enumerate(task_list):
                             file_path = task['asset'].replace('//', os.path.sep)
                             source_files.append(pathlib.Path(os.path.join(sxglobals.asset_path, file_path)))
-                            task['asset'] = os.path.basename(task['asset'])
+                            node_tasks[node_ip][i]['asset'] = os.path.basename(task['asset'])
                         if len(source_files) > 0:
                             init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files)
 

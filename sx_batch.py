@@ -28,6 +28,7 @@ library_path = os.path.abspath(args.librarypath) + os.path.sep
 #    The below steps are designed for use with SX Tools Blender addon.
 #    Edit according to the needs of your project.
 # ------------------------------------------------------------------------
+# bpy.ops.wm.addon_install(filepath='/home/bob/sxtools-blender/sxtools.py')
 bpy.ops.preferences.addon_enable(module="sxtools")
 bpy.context.preferences.addons['sxtools'].preferences.libraryfolder = library_path
 bpy.context.preferences.addons['sxtools'].preferences.flipsmartx = False

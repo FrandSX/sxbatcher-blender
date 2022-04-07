@@ -914,8 +914,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
-            except OSError as error:
-                print(error)
+            except (OSError) as error:
+                if 'timed out' not in error:
+                    print(error)
 
 
 # ------------------------------------------------------------------------
@@ -1606,3 +1607,5 @@ if __name__ == '__main__':
 # TODO:
 # - node selection (to use remote only)
 # - file collection
+# - handle None in settings
+# - task_data sent despite no files

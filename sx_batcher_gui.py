@@ -890,6 +890,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         target_dir = os.path.realpath('batch_submissions')
                     else:
                         target_dir = os.path.join(os.path.realpath('batch_results'), task_data[0][file])
+                        try:
+                            os.mkdir(target_dir)
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')

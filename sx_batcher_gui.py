@@ -847,9 +847,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         super().__init__()
         self.stop_event = threading.Event()
         self.bufsize = 4096
-        self.sock.settimeout(15)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
+        self.sock.settimeout(15)
 
 
     def stop(self):

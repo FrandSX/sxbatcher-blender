@@ -201,7 +201,6 @@ class SXBATCHER_init(object):
 
     def transfer_files(self, address, files):
         bufsize = 4096
-        print('files:', files)
         # sizemap should be
         # filename:size
         # doesn't matter how you get there
@@ -338,20 +337,41 @@ class SXBATCHER_batch_manager(object):
         init.save_json(file_path, file_dict)
 
 
+    def finish_task(self, reset=False):
+        if reset:
+            label_string = 'No Changes!'
+        else:
+            self.update_revisions()
+
+            if len(sxglobals.errors) > 0:
+                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds\n'
+                label_string += 'Errors in:\n'
+                for file in sxglobals.errors:
+                    label_string += file+'\n'
+            else:
+                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
+
+        gui.label_progress.configure(text=label_string)
+        gui.button_batch['state'] = 'normal'
+        gui.progress_bar['value'] = 0
+        sxglobals.errors = []
+        sxglobals.node_busy_status = False
+
+        deleted = False
+        with os.scandir(os.path.realpath('batch_submissions')) as submissions:
+            for file in submissions:
+                if file.name.endswith('.blend') and file.is_file():
+                    deleted = True
+                    os.remove(file)
+        if deleted:
+            print('SX Batcher: Cleaned batch_submissions folder')
+
+
     # Handles task assignments:
     # 1) Local-only batch processing assigned via GUI
     # 2) Distributed batch processing assigned via GUI
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
-
-        def reset_batch_button():
-            gui.label_progress.configure(text='No Changes!')
-            gui.button_batch['state'] = 'normal'
-            gui.progress_bar['value'] = 0
-            sxglobals.errors = []
-            sxglobals.node_busy_status = False
-
-
         sxglobals.export_objs = []
         sxglobals.node_busy_status = True
         gui.label_progress.configure(text='Job Running')
@@ -367,7 +387,7 @@ class SXBATCHER_batch_manager(object):
                 t.start()
                 gui.step_check(t)
             else:
-                reset_batch_button()
+                self.finish_task(reset=True)
         else:
             if sxglobals.use_network_nodes:
                 # Send files to be processed to network nodes
@@ -395,7 +415,7 @@ class SXBATCHER_batch_manager(object):
                                 print("sent: {}".format(payload))
                             sock.close()
                 else:
-                    reset_batch_button()
+                    self.finish_task(reset=True)
             else:
                 # Receive export list created in the UI
                 tasks = self.prepare_local_tasks()
@@ -404,7 +424,7 @@ class SXBATCHER_batch_manager(object):
                     t.start()
                     gui.step_check(t)
                 else:
-                    reset_batch_button()
+                    self.finish_task(reset=True)
 
 
     def prepare_local_tasks(self):
@@ -454,35 +474,30 @@ class SXBATCHER_batch_manager(object):
         # grab blender work script from the location of this script
         script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
         asset_path = os.path.realpath('batch_submissions')
-
         remote_tasks = sxglobals.remote_assignment
         tasks = []
+
+        # create results folder
+        dir_name = 'batch_results'
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+            print(f'Folder {dir_name} created')
+        else:    
+            print(f'Folder {dir_name} exists')
+
         for remote_task in remote_tasks:
             subdivision_count = None
             palette_name = None
             asset = remote_task['asset']
-            subdivision = remote_task['subdivision']
-            if subdivision:
+            if remote_task['subdivision'] == 'True':
                 subdivision_count = str(remote_task['subdivision_count'])
-            palette = remote_task['palette']
-            if palette:
+            if remote_task['palette'] == 'True':
                 palette_name = remote_task['palette_name']
-            static_vertex_colors = remote_task['static_vertex_colors']
-            debug = remote_task['debug']
-
-            # create results folder
-            dir_name = 'batch_results'
-            if not os.path.exists(dir_name):
-                os.mkdir(dir_name)
-                print(f'Folder {dir_name} created')
-            else:    
-                print(f'Folder {dir_name} exists')
-
+            static_vertex_colors = True if remote_task['static_vertex_colors'] == 'True' else False
+            debug = True if remote_task['debug'] == 'True' else False
             export_path = str(os.path.realpath(dir_name))
-
             file = os.path.join(asset_path, asset)
-            print(file)
-
+ 
             # Generate task definition for each local headless Blender
             tasks.append(
                 (sxglobals.blender_path,
@@ -1009,19 +1024,7 @@ class SXBATCHER_gui(object):
 
     def check_progress(self, t):
         if not t.is_alive():
-            if len(sxglobals.errors) > 0:
-                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds\n'
-                label_string += 'Errors in:\n'
-                for file in sxglobals.errors:
-                    label_string += file+'\n'
-            else:
-                label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
-            manager.update_revisions()
-            self.label_progress.configure(text=label_string)
-            self.button_batch['state'] = 'normal'
-            self.progress_bar['value'] = 0
-            sxglobals.errors = []
-            sxglobals.node_busy_status = False
+            manager.finish_task()
         else:
             self.step_check(t)
 

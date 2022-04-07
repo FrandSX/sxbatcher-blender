@@ -161,10 +161,10 @@ class SXBATCHER_init(object):
     def save_conf(self):
         conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
         temp_dict = {}
-        temp_dict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//')
-        temp_dict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//')
-        temp_dict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//')
-        temp_dict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//')
+        temp_dict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//') if sxglobals.blender_path != '' else ''
+        temp_dict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//') if sxglobals.catalogue_path != '' else ''
+        temp_dict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//') if sxglobals.export_path != '' else ''
+        temp_dict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else ''
         temp_dict['debug'] = str(int(sxglobals.debug))
         temp_dict['palette'] = str(int(sxglobals.palette))
         temp_dict['palette_name'] = sxglobals.palette_name
@@ -181,16 +181,16 @@ class SXBATCHER_init(object):
 
 
     def validate_paths(self):
-        if sxglobals.blender_path is not None:
-            sxglobals.blender_path = sxglobals.blender_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.blender_path.replace('//', os.path.sep)) else None
-        if sxglobals.catalogue_path is not None:
-            sxglobals.catalogue_path = sxglobals.catalogue_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.catalogue_path.replace('//', os.path.sep)) else None
-        if sxglobals.export_path is not None:
-            sxglobals.export_path = sxglobals.export_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.export_path.replace('//', os.path.sep)) else None
-        if sxglobals.sxtools_path is not None:
-            sxglobals.sxtools_path = sxglobals.sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.sxtools_path.replace('//', os.path.sep)) else None
+        if sxglobals.blender_path != '':
+            sxglobals.blender_path = sxglobals.blender_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.blender_path.replace('//', os.path.sep)) else ''
+        if sxglobals.catalogue_path != '':
+            sxglobals.catalogue_path = sxglobals.catalogue_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.catalogue_path.replace('//', os.path.sep)) else ''
+        if sxglobals.export_path != '':
+            sxglobals.export_path = sxglobals.export_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.export_path.replace('//', os.path.sep)) else ''
+        if sxglobals.sxtools_path != '':
+            sxglobals.sxtools_path = sxglobals.sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.sxtools_path.replace('//', os.path.sep)) else ''
 
-        return (sxglobals.blender_path is not None) and (sxglobals.catalogue_path is not None) and (sxglobals.export_path is not None) and (sxglobals.sxtools_path is not None)
+        return (sxglobals.blender_path != '') and (sxglobals.catalogue_path != '') and (sxglobals.export_path != '') and (sxglobals.sxtools_path != '')
 
 
     def load_asset_data(self, catalogue_path):

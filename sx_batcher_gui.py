@@ -207,9 +207,9 @@ class SXBATCHER_init(object):
         # below is a placeholder
         payload = files.pop(0)
         sizemap = {file.name:file.stat().st_size for file in files}
-        print('[+] files to be transferred:')
-        for file, size in sizemap.items():
-            print(f'\t{file}: {size}')
+        # print('[+] files to be transferred:')
+        # for file, size in sizemap.items():
+        #     print(f'\t{file}: {size}')
         # open TCP socket in context manager
         with socket.create_connection(address, timeout=20) as sock:
             # send file:size json
@@ -887,7 +887,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 if sxglobals.share_cpus and (taskdata is not None) and (taskdata[0]['magic'] == sxglobals.magic_task):
                     for task in taskdata:
                         sxglobals.remote_assignment.append(task)
-                        print('task:', task)
                         if len(sxglobals.remote_assignment) == int(task['batch_size']):
                             print('SX Batcher: Processing remotely assigned tasks')
                             manager.task_handler(remote_task=True)

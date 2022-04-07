@@ -205,6 +205,7 @@ class SXBATCHER_init(object):
         # filename:size
         # doesn't matter how you get there
         # below is a placeholder
+        payload = files.pop(0)
         sizemap = {file.name:file.stat().st_size for file in files}
         print('[+] files to be transferred:')
         for file, size in sizemap.items():
@@ -212,6 +213,8 @@ class SXBATCHER_init(object):
         # open TCP socket in context manager
         with socket.create_connection(address, timeout=20) as sock:
             # send file:size json
+            sock.send(payload)
+            time.sleep(0.1)
             sock.send(json.dumps(sizemap).encode('utf-8'))
             time.sleep(0.1)
             # for each file, read as binary and shove into socket
@@ -399,20 +402,11 @@ class SXBATCHER_batch_manager(object):
                             file_path = task['asset'].replace('//', os.path.sep)
                             source_files.append(pathlib.Path(os.path.join(sxglobals.asset_path, file_path)))
                             node_tasks[node_ip][i]['asset'] = os.path.basename(task['asset'])
+                        payload = json.dumps(node_tasks[node_ip]).encode('utf-8')
+                        source_files.insert(0, payload)
+
                         if len(source_files) > 0:
                             init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files)
-
-                        # Send task list to node
-                        for value in node_tasks[node_ip]:
-                            payload = json.dumps(value).encode('utf-8')
-                            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-                            addr = node_ip
-                            port = sxglobals.discovery_port
-                            sock.sendto(payload, (addr, port))
-                            if __debug__:
-                                print("sent: {}".format(payload))
-                            sock.close()
                 else:
                     self.finish_task(reset=True)
             else:
@@ -831,11 +825,6 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                 sxglobals.nodes = list(set(nodes))
                 gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
-            elif sxglobals.share_cpus and (fields is not None) and (fields['magic'] == sxglobals.magic_task):
-                sxglobals.remote_assignment.append(fields)
-                if len(sxglobals.remote_assignment) == int(fields['batch_size']):
-                    print('SX Batcher: Processing remotely assigned tasks')
-                    manager.task_handler(remote_task=True)
 
 
 # ------------------------------------------------------------------------
@@ -858,6 +847,14 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
 
     def run(self):
+        # create batch submissions folder
+        dir_name = 'batch_submissions'
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+            print(f'Folder {dir_name} created')
+        else:    
+            print(f'Folder {dir_name} exists')
+
         while not self.stop_event.is_set():
             try:
                 # bind to given address and wait
@@ -867,18 +864,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 for some unfathomable reason """
                 conn, addr = self.sock.accept()
                 print(f'[+] got connection {addr}')
+                taskdata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 metadata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
-
-                # create batch submissions folder
-                dir_name = 'batch_submissions'
-                if not os.path.exists(dir_name):
-                    os.mkdir(dir_name)
-                    print(f'Folder {dir_name} created')
-                else:    
-                    print(f'Folder {dir_name} exists')
-
                 target_dir = os.path.realpath('batch_submissions')
-
                 metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
                 print(f'[+] got file list:')
                 for fname in metadata:
@@ -895,6 +883,15 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             left -= f.write(conn.recv(self.bufsize if quot else remain))
                             
                         print(f' {f.tell()}/{size}')
+
+                if sxglobals.share_cpus and (taskdata is not None) and (taskdata[0]['magic'] == sxglobals.magic_task):
+                    for task in taskdata:
+                        sxglobals.remote_assignment.append(task)
+                        print('task:', task)
+                        if len(sxglobals.remote_assignment) == int(task['batch_size']):
+                            print('SX Batcher: Processing remotely assigned tasks')
+                            manager.task_handler(remote_task=True)
+
                 conn.close()
 
             except OSError as error:

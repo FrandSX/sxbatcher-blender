@@ -623,13 +623,17 @@ class SXBATCHER_batch_local(object):
         # if 'master' in tasks[0]:
         if sxglobals.share_cpus or sxglobals.use_network_nodes:
             for_transfer = []
-            with os.scandir(os.path.realpath('batch_results')) as results:
-                for file in results:
-                    if file.name.endswith('.fbx') and file.is_file():
-                        for_transfer.append(file)
+            payload = {'magic': 'ankdf89d'}
+
+            for root, subdirs, files in os.walk('batch_results'):
+                for file in files:
+                    if file.endswith('.fbx'):
+                        file_path = os.path.join(root, file)
+                        for_transfer.append(file_path)
+                        payload[file] = os.path.basename(root)
 
             if len(for_transfer) > 0:
-                for_transfer.insert(0, {'magic': 'ankdf89d'})
+                for_transfer.insert(0, payload)
                 init.transfer_files((tasks[0]['master'], sxglobals.file_transfer_port), for_transfer)
             
 
@@ -873,19 +877,19 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 for some unfathomable reason """
                 conn, addr = self.sock.accept()
                 print(f'[+] got connection {addr}')
-                taskdata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
-                metadata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+                task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+                transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
 
-                if taskdata[0]['magic'] == sxglobals.magic_task:
+                if task_data[0]['magic'] == sxglobals.magic_task:
                     target_dir = os.path.realpath('batch_submissions')
                 else:
                     target_dir = os.path.realpath('batch_results')
 
-                metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
+                transfer_data = {pathlib.Path(key).name:int(val) for key, val in transfer_data.items()}
                 print(f'[+] got file list:')
-                for fname in metadata:
+                for fname in transfer_data:
                     print(f'\t{fname}')
-                for file, size in metadata.items():
+                for file, size in transfer_data.items():
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
                         # check remaining data size is more than zero
@@ -898,8 +902,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             
                         print(f' {f.tell()}/{size}')
 
-                if sxglobals.share_cpus and (taskdata is not None) and (taskdata[0]['magic'] == sxglobals.magic_task):
-                    for task in taskdata:
+                if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
+                    for task in task_data:
                         sxglobals.remote_assignment.append(task)
                         if len(sxglobals.remote_assignment) == int(task['batch_size']):
                             print('SX Batcher: Processing remotely assigned tasks')

@@ -880,19 +880,16 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 print(f'[+] got connection {addr}')
                 task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
-                print('recvd task_data:', task_data)
-                print('ismagicyes:', task_data[0]['magic'])
 
                 transfer_data = {pathlib.Path(key).name:int(val) for key, val in transfer_data.items()}
                 # print(f'[+] got file list:')
                 # for fname in transfer_data:
                 #     print(f'\t{fname}')
                 for file, size in transfer_data.items():
-
                     if task_data[0]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
                     else:
-                        target_dir = os.path.realpath('batch_results').join(task_data[0][file])
+                        target_dir = os.path.join(os.path.realpath('batch_results'), task_data[0][file])
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')

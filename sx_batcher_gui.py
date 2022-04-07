@@ -621,15 +621,16 @@ class SXBATCHER_batch_local(object):
         # and then transfer files to taskmaster
 
         # if 'master' in tasks[0]:
-        for_transfer = []
-        with os.scandir(os.path.realpath('batch_results')) as results:
-            for file in results:
-                if file.name.endswith('.fbx') and file.is_file():
-                    for_transfer.append(file)
+        if sxglobals.share_cpus or sxglobals.use_network_nodes:
+            for_transfer = []
+            with os.scandir(os.path.realpath('batch_results')) as results:
+                for file in results:
+                    if file.name.endswith('.fbx') and file.is_file():
+                        for_transfer.append(file)
 
-        if len(for_transfer) > 0:
-            for_transfer.insert(0, {'magic': 'ankdf89d'})
-            init.transfer_files((tasks[0]['master'], sxglobals.file_transfer_port), for_transfer)
+            if len(for_transfer) > 0:
+                for_transfer.insert(0, {'magic': 'ankdf89d'})
+                init.transfer_files((tasks[0]['master'], sxglobals.file_transfer_port), for_transfer)
             
 
 # ------------------------------------------------------------------------

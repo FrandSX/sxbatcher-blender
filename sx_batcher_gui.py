@@ -65,6 +65,7 @@ class SXBATCHER_globals(object):
         self.file_transfer_port = 50001
         self.magic = 'fna349fn'
         self.magic_task = 'snaf68yh'
+        self.magic_result = 'ankdf89d'
         self.nodes = []
         self.tasked_nodes = None
         self.node_busy_status = False
@@ -359,14 +360,15 @@ class SXBATCHER_batch_manager(object):
         sxglobals.errors = []
         sxglobals.node_busy_status = False
 
-        deleted = False
-        with os.scandir(os.path.realpath('batch_submissions')) as submissions:
-            for file in submissions:
-                if file.name.endswith('.blend') and file.is_file():
-                    deleted = True
-                    os.remove(file)
-        if deleted:
-            print('SX Batcher: Cleaned batch_submissions folder')
+        if sxglobals.share_cpus:
+            deleted = False
+            with os.scandir(os.path.realpath('batch_submissions')) as submissions:
+                for file in submissions:
+                    if file.name.endswith('.blend') and file.is_file():
+                        deleted = True
+                        os.remove(file)
+            if deleted:
+                print('SX Batcher: Cleaned batch_submissions folder')
 
 
     # Handles task assignments:
@@ -470,14 +472,6 @@ class SXBATCHER_batch_manager(object):
         remote_tasks = sxglobals.remote_assignment
         tasks = []
 
-        # create results folder
-        dir_name = 'batch_results'
-        if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
-            print(f'Folder {dir_name} created')
-        else:    
-            print(f'Folder {dir_name} exists')
-
         for remote_task in remote_tasks:
             subdivision_count = None
             palette_name = None
@@ -488,7 +482,7 @@ class SXBATCHER_batch_manager(object):
                 palette_name = remote_task['palette_name']
             static_vertex_colors = True if remote_task['static_vertex_colors'] == 'True' else False
             debug = True if remote_task['debug'] == 'True' else False
-            export_path = str(os.path.realpath(dir_name))
+            export_path = str(os.path.realpath('batch_results'))
             file = os.path.join(asset_path, asset)
  
             # Generate task definition for each local headless Blender
@@ -513,6 +507,7 @@ class SXBATCHER_batch_manager(object):
         for asset in source_assets:
             tasks.append({
                 "magic": sxglobals.magic_task,
+                "master": sxglobals.ip_addr,
                 "asset": asset,
                 "subdivision": str(sxglobals.subdivision),
                 "subdivision_count": str(sxglobals.subdivision_count),
@@ -623,7 +618,19 @@ class SXBATCHER_batch_local(object):
             print(f'{sxglobals.nodename}: Errors in:')
             for file in sxglobals.errors:
                 print(file)
+        # and then transfer files to taskmaster
 
+        # if 'master' in tasks[0]:
+        for_transfer = []
+        with os.scandir(os.path.realpath('batch_results')) as results:
+            for file in results:
+                if file.name.endswith('.fbx') and file.is_file():
+                    for_transfer.append(file)
+
+        if len(for_transfer) > 0:
+            for_transfer.insert(0, {'magic': 'ankdf89d'})
+            init.transfer_files((tasks[0]['master'], sxglobals.file_transfer_port), for_transfer)
+            
 
 # ------------------------------------------------------------------------
 #    Network Distributed Processing
@@ -828,8 +835,8 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 
 
 # ------------------------------------------------------------------------
-#    Network Node Task Listener
-#    Receives files for processing
+#    Network Node File Listener
+#    Receives files for and from processing
 # ------------------------------------------------------------------------
 class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
@@ -848,12 +855,13 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
     def run(self):
         # create batch submissions folder
-        dir_name = 'batch_submissions'
-        if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
-            print(f'Folder {dir_name} created')
-        else:    
-            print(f'Folder {dir_name} exists')
+        dir_names = ('batch_submissions', 'batch_results')
+        for dir_name in dir_names:
+            if not os.path.exists(dir_name):
+                os.mkdir(dir_name)
+                print(f'Folder {dir_name} created')
+            else:    
+                print(f'Folder {dir_name} exists')
 
         while not self.stop_event.is_set():
             try:
@@ -866,7 +874,12 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 print(f'[+] got connection {addr}')
                 taskdata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 metadata = json.loads(conn.recv(self.bufsize).decode('utf-8'))
-                target_dir = os.path.realpath('batch_submissions')
+
+                if taskdata[0]['magic'] == sxglobals.magic_task:
+                    target_dir = os.path.realpath('batch_submissions')
+                else:
+                    target_dir = os.path.realpath('batch_results')
+
                 metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
                 print(f'[+] got file list:')
                 for fname in metadata:
@@ -1155,15 +1168,29 @@ class SXBATCHER_gui(object):
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
 
-            if sxglobals.share_cpus:
-                self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-                self.file_receiving_thread.start()
-                if __debug__:
-                    print('SX Batcher: File receiving started')
+            if self.file_receiving_thread is None:
+                if sxglobals.share_cpus:
+                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.start()
+                    if __debug__:
+                        print('SX Batcher: File receiving started')
+                else:
+                    if not sxglobals.use_network_nodes:
+                        self.file_receiving_thread.stop()
+                        if __debug__:
+                            print('SX Batcher: File receiving stopped')
+                    else:
+                        pass
             else:
-                self.file_receiving_thread.stop()
-                if __debug__:
-                    print('SX Batcher: File receiving stopped')
+                if sxglobals.share_cpus and not self.file_receiving_thread.is_alive():
+                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.start()
+                    if __debug__:
+                        print('SX Batcher: File receiving restarted')
+                elif not sxglobals.share_cpus and self.broadcast_thread.is_alive() and not sxglobals.use_network_nodes:
+                    self.broadcast_thread.stop()
+                    if __debug__:
+                        print('SX Batcher: File receiving stopped')    
 
             if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
@@ -1218,7 +1245,31 @@ class SXBATCHER_gui(object):
                 elif not sxglobals.use_network_nodes and self.discovery_thread.is_alive():
                     self.discovery_thread.stop()
                     if __debug__:
-                        print('SX Batcher: Node discovery stopped')       
+                        print('SX Batcher: Node discovery stopped')
+
+            if self.file_receiving_thread is None:
+                if sxglobals.use_network_nodes:
+                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.start()
+                    if __debug__:
+                        print('SX Batcher: File receiving started')
+                else:
+                    if not sxglobals.share_cpus:
+                        self.file_receiving_thread.stop()
+                        if __debug__:
+                            print('SX Batcher: File receiving stopped')
+                    else:
+                        pass
+            else:
+                if sxglobals.use_network_nodes and not self.file_receiving_thread.is_alive():
+                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.start()
+                    if __debug__:
+                        print('SX Batcher: File receiving restarted')
+                elif not sxglobals.share_cpus and self.broadcast_thread.is_alive() and not sxglobals.use_network_nodes:
+                    self.broadcast_thread.stop()
+                    if __debug__:
+                        print('SX Batcher: File receiving stopped')    
 
 
         def browse_button_bp():

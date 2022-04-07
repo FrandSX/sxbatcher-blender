@@ -1546,8 +1546,5 @@ if __name__ == '__main__':
 
 
 # TODO:
-# - check for magic before parsing other node fields
 # - node selection (to use remote only)
-# - node status
 # - file collection
-# - file transfer for remote assets

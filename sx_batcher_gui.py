@@ -914,11 +914,9 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
-            except OSError as error:
-                print(error)
-
-            except TimeoutError:
-                pass
+            except (OSError, TimeoutError) as error:
+                if str(error) != 'timed out':
+                    print(error)
 
 
 # ------------------------------------------------------------------------
@@ -1277,8 +1275,8 @@ class SXBATCHER_gui(object):
                     self.file_receiving_thread.start()
                     if __debug__:
                         print('SX Batcher: File receiving restarted')
-                elif not sxglobals.share_cpus and self.broadcast_thread.is_alive() and not sxglobals.use_network_nodes:
-                    self.broadcast_thread.stop()
+                elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
+                    self.file_receiving_thread.stop()
                     if __debug__:
                         print('SX Batcher: File receiving stopped')    
 

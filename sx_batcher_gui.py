@@ -1482,7 +1482,3 @@ if __name__ == '__main__':
         gui.discovery_thread.stop()
     if gui.file_receiving_thread is not None:
         gui.file_receiving_thread.stop()
-
-
-# TODO:
-# - node selection (to use remote only)

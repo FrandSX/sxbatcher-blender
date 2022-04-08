@@ -308,6 +308,8 @@ class SXBATCHER_batch_manager(object):
         gui.progress_bar['value'] = 0
         sxglobals.errors = []
         sxglobals.node_busy_status = False
+        sxglobals.master_node = None
+        sxglobals.remote_assignment = []
 
         if sxglobals.share_cpus:
             deleted = False
@@ -346,6 +348,7 @@ class SXBATCHER_batch_manager(object):
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
                 if len(node_tasks) > 0:
+                    print('braap')
                     for node_ip, task_list in node_tasks.items():
                         # Submit files to node
                         source_files = []
@@ -452,73 +455,74 @@ class SXBATCHER_batch_manager(object):
     def prepare_node_tasks(self):
         source_assets = self.get_source_assets(sxglobals.revision_export, costs=True)
         tasks = []
-
-        for asset in source_assets:
-            tasks.append({
-                "magic": sxglobals.magic_task,
-                "master": sxglobals.ip_addr,
-                "asset": asset[0],
-                "subdivision": str(sxglobals.subdivision),
-                "subdivision_count": str(sxglobals.subdivision_count),
-                "palette": str(sxglobals.palette),
-                "palette_name": sxglobals.palette_name,
-                "static_vertex_colors": str(sxglobals.static_vertex_colors),
-                "debug": str(sxglobals.debug),
-                "batch_size": str(len(source_assets))
-            })
-
         node_tasks = {}
-        for node in sxglobals.nodes:
-            node_ip = node[0]
-            node_tasks[node_ip] = []
 
-        method = 1 # 1 naive, 2 cost-based
-        if method == 1:
-            # Naive method: Divide tasks per node according to core counts
-            workload = len(tasks)
-            while workload > 0:
-                for node in sxglobals.nodes:
-                    node_ip = node[0]
-                    cores = int(node[3])
-                    task_list = node_tasks[node_ip]
-                    for i in range(cores):
-                        if workload > i:
-                            task_list.append(tasks[len(tasks) - workload])
-                            node_tasks[node_ip] = task_list
-                            workload -= 1
-
-        elif method == 2:
-            # Cost based method: Divide tasks per node 
-            total_cores = 0
-            for node in sxglobals.nodes:
-                total_cores += int(node[3])
-
-            total_cost = 0
+        if len(source_assets) > 0:
             for asset in source_assets:
-                total_cost += asset[1]
+                tasks.append({
+                    "magic": sxglobals.magic_task,
+                    "master": sxglobals.ip_addr,
+                    "asset": asset[0],
+                    "subdivision": str(sxglobals.subdivision),
+                    "subdivision_count": str(sxglobals.subdivision_count),
+                    "palette": str(sxglobals.palette),
+                    "palette_name": sxglobals.palette_name,
+                    "static_vertex_colors": str(sxglobals.static_vertex_colors),
+                    "debug": str(sxglobals.debug),
+                    "batch_size": str(len(source_assets))
+                })
 
-            # Allocate (and adjust) work share bias
-            work_shares = [0] * len(sxglobals.nodes)
-            start = 0
-            for j, node in enumerate(sxglobals.nodes):
-                num_cores = int(node[3])
-                task_list = node_tasks[node_ip]
-                bias = 0
-                work_load = 0
-                work_share = total_cost * ((float(num_cores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+            for node in sxglobals.nodes:
+                node_ip = node[0]
+                node_tasks[node_ip] = []
 
-                for k in range(start, len(source_assets)):
-                    if (work_load + source_assets[k][1]) < work_share:
-                        task_list.append(tasks[k])
-                        node_tasks[node_ip] = task_list
-                        work_load += source_assets[k][1]
-                        start += 1
-                    elif j+1 == len(sxglobals.nodes):
-                        task_list.append(tasks[k])
-                        work_load += source_assets[k][1]
-                        start += 1
+            method = 2 # 1 naive, 2 cost-based
+            if method == 1:
+                # Naive method: Divide tasks per node according to core counts
+                workload = len(tasks)
+                while workload > 0:
+                    for node in sxglobals.nodes:
+                        node_ip = node[0]
+                        cores = int(node[3])
+                        task_list = node_tasks[node_ip]
+                        for i in range(cores):
+                            if workload > i:
+                                task_list.append(tasks[len(tasks) - workload])
+                                node_tasks[node_ip] = task_list
+                                workload -= 1
 
-                work_shares[j] = work_share
+            elif method == 2:
+                # Cost based method: Divide tasks per node 
+                total_cores = 0
+                for node in sxglobals.nodes:
+                    total_cores += int(node[3])
+
+                total_cost = 0
+                for asset in source_assets:
+                    total_cost += asset[1]
+
+                # Allocate (and adjust) work share bias
+                work_shares = [0] * len(sxglobals.nodes)
+                start = 0
+                for j, node in enumerate(sxglobals.nodes):
+                    num_cores = int(node[3])
+                    task_list = node_tasks[node_ip]
+                    bias = 0
+                    work_load = 0
+                    work_share = total_cost * ((float(num_cores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+
+                    for k in range(start, len(source_assets)):
+                        if (work_load + source_assets[k][1]) < work_share:
+                            task_list.append(tasks[k])
+                            node_tasks[node_ip] = task_list
+                            work_load += source_assets[k][1]
+                            start += 1
+                        elif j+1 == len(sxglobals.nodes):
+                            task_list.append(tasks[k])
+                            work_load += source_assets[k][1]
+                            start += 1
+
+                    work_shares[j] = work_share
 
         return node_tasks
 
@@ -703,16 +707,10 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         # create batch submissions folder
         dir_names = ('batch_submissions', 'batch_results')
         for dir_name in dir_names:
-            if not os.path.exists(dir_name):
-                os.mkdir(dir_name)
-                print(f'Folder {dir_name} created')
-            else:    
-                print(f'Folder {dir_name} exists')
+            os.makedirs(dir_name, exist_ok=True)
 
         while not self.stop_event.is_set():
             try:
-                # bind to given address and wait
-                # self.sock.bind(self.address)
                 self.sock.listen()
                 """ accept() returns a new socket 
                 for some unfathomable reason """
@@ -722,18 +720,16 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
 
                 transfer_data = {pathlib.Path(key).name:int(val) for key, val in transfer_data.items()}
-                # print(f'[+] got file list:')
-                # for fname in transfer_data:
-                #     print(f'\t{fname}')
                 for file, size in transfer_data.items():
                     if task_data[0]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
                     else:
-                        target_dir = os.path.join(os.path.realpath('batch_results'), task_data[0][file])
+                        target_dir = os.path.join(os.path.realpath('batch_results_network'), task_data[0][file])
                         os.makedirs(target_dir, exist_ok=True)
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
+                        print('ffs:', file, size)
                         # check remaining data size is more than zero
                         # read bufsize if there's more than bufsize left
                         # else modulo
@@ -744,6 +740,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             
                         print(f' {f.tell()}/{size}')
 
+                conn.close()
+
                 if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
                     sxglobals.master_node = task_data[0]['master']
                     for task in task_data:
@@ -751,8 +749,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         if len(sxglobals.remote_assignment) == int(task['batch_size']):
                             print('SX Batcher: Processing remotely assigned tasks')
                             manager.task_handler(remote_task=True)
-
-                conn.close()
 
             except (OSError, TimeoutError) as error:
                 if str(error) != 'timed out':
@@ -1446,6 +1442,3 @@ if __name__ == '__main__':
 
 # TODO:
 # - node selection (to use remote only)
-# - file collection
-# - handle None in settings
-# - task_data sent despite no files

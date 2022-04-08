@@ -914,9 +914,11 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
-            except (OSError) as error:
-                if 'timed out' not in error:
-                    print(error)
+            except OSError as error:
+                print(error)
+
+            except TimeoutError:
+                pass
 
 
 # ------------------------------------------------------------------------

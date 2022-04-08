@@ -19,28 +19,22 @@ from tkinter import filedialog
 class SXBATCHER_globals(object):
     def __init__(self):
         # Main locations, validate if changed
-        self.blender_path = None
-        self.catalogue_path = None
-        self.export_path = None
-        self.sxtools_path = None
-        self.asset_path = None
+        self.blender_path = ''
+        self.catalogue_path = ''
+        self.export_path = ''
+        self.sxtools_path = ''
+        self.asset_path = ''
 
-        self.num_cores = None
         self.share_cpus = None
         self.shared_cores = None
         self.use_network_nodes = None
         self.ip_addr = None
-        self.nodename = None
         self.catalogue = None
-        self.categories = None
-        self.category = None
+        self.active_category = None
         self.then = None
         self.now = None
 
         self.update_repo = False # call all nodes to update their plastic repos
-        self.listonly = None # only show files that contain export objs
-        self.all = None # if full catalogue or all objects are to be exported
-        self.script_path = None
 
         # Batch lists
         self.export_objs = None
@@ -80,10 +74,10 @@ class SXBATCHER_globals(object):
 class SXBATCHER_init(object):
     def __init__(self):
         conf = self.load_conf()
-        sxglobals.blender_path = conf.get('blender_path')
-        sxglobals.catalogue_path = conf.get('catalogue_path')
-        sxglobals.export_path = conf.get('export_path')
-        sxglobals.sxtools_path = conf.get('sxtools_path')
+        sxglobals.blender_path = conf.get('blender_path', '')
+        sxglobals.catalogue_path = conf.get('catalogue_path', '')
+        sxglobals.export_path = conf.get('export_path', '')
+        sxglobals.sxtools_path = conf.get('sxtools_path', '')
         sxglobals.debug = bool(int(conf.get('debug', False)))
         sxglobals.palette = bool(int(conf.get('palette', False)))
         sxglobals.palette_name = conf.get('palette_name', '')
@@ -94,22 +88,16 @@ class SXBATCHER_init(object):
         sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
         sxglobals.shared_cores = int(conf.get('shared_cores', 0))
         sxglobals.use_network_nodes = bool(int(conf.get('use_nodes', False)))
+        sxglobals.ip_addr = self.get_ip()
         self.validate_paths()
 
-        sxglobals.script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        if sxglobals.catalogue_path is not None:
+        if sxglobals.catalogue_path != '':
             sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
-
-        sxglobals.ip_addr = self.get_ip()
-        sxglobals.nodename = 'Node '+sxglobals.ip_addr
-        sxglobals.num_cores = multiprocessing.cpu_count()
-
-        if sxglobals.catalogue_path is None:
-            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
-        else:
             sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
-        sxglobals.categories = list(sxglobals.catalogue.keys())
-        sxglobals.category = sxglobals.categories[0]
+        else:
+            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
+
+        sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
 
         return None
 
@@ -134,7 +122,7 @@ class SXBATCHER_init(object):
                 input.close()
             return temp_dict
         except ValueError:
-            print(f'{sxglobals.nodename} Error: Invalid JSON file {file_path}')
+            print(f'Node {sxglobals.ip_addr} Error: Invalid JSON file {file_path}')
             return {}
         except IOError:
             return {}
@@ -150,11 +138,9 @@ class SXBATCHER_init(object):
 
     def load_conf(self):
         conf = {}
-    
         if os.path.isfile(os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')):
             conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
             conf = self.load_json(conf_path)
-
         return conf
 
 
@@ -197,10 +183,11 @@ class SXBATCHER_init(object):
         if os.path.isfile(catalogue_path):
             return self.load_json(catalogue_path)
         else:
-            print(f'{sxglobals.nodename} Error: Invalid Catalogue path')
+            print(f'Node {sxglobals.ip_addr} Error: Invalid Catalogue path')
             return {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
 
 
+    # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, files):
         bufsize = 4096
         # sizemap should be
@@ -227,48 +214,6 @@ class SXBATCHER_init(object):
                         sock.send(chunk)
                 print('done')
 
-        # path = pathlib.Path('C:/Users/zephyrus/dummy_data')
-        # all files in folder
-        # for_transfer = [file for file in path.iterdir()]
-        # hit it
-        # transfer_files(('127.0.0.1', 5158), for_transfer)
-
-
-    def receive_files(self, address):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            # bind to given address and wait
-            sock.bind(address)
-            sock.listen()
-            """ accept() returns a new socket 
-            for some unfathomable reason """
-            conn, addr = sock.accept()
-            print(f'[+] got connection {addr}')
-            metadata = json.loads(conn.recv(bufsize).decode('utf-8'))
-            
-            # directory to save in, change this
-            target_dir = pathlib.Path.home() / 'receivetest'
-            target_dir.mkdir(exist_ok=True)
-
-            metadata = {pathlib.Path(key).name:int(val) for key, val in metadata.items()}
-            print(f'[+] got file list:')
-            for fname in metadata:
-                print(f'\t{fname}')
-            for file, size in metadata.items():
-                with open(target_dir / file, 'wb') as f:
-                    print(f'[+] writing into {file}...', end='')
-                    # check remaining data size is more than zero
-                    # read bufsize if there's more than bufsize left
-                    # else modulo
-                    left = size
-                    while left:
-                        quot, remain = divmod(left, bufsize)
-                        left -= f.write(conn.recv(bufsize if quot else remain))
-                        
-                    print(f' {f.tell()}/{size}')
-            conn.close()
-
-        # receive_files(('127.0.0.1', 5158))
-
 
 # ------------------------------------------------------------------------
 #    Batch Manager for Localhost and Nodes
@@ -285,8 +230,7 @@ class SXBATCHER_batch_manager(object):
 
         # Also update catalogue in case of new revisions
         sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-        sxglobals.categories = list(sxglobals.catalogue.keys())
-        sxglobals.category = sxglobals.categories[0]
+        sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
 
         source_assets = []
         for obj in sxglobals.export_objs:
@@ -416,7 +360,7 @@ class SXBATCHER_batch_manager(object):
                 # Receive export list created in the UI
                 tasks = self.prepare_local_tasks()
                 if len(tasks) > 0:
-                    t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.num_cores))
+                    t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, multiprocessing.cpu_count()))
                     t.start()
                     gui.step_check(t)
                 else:
@@ -445,7 +389,7 @@ class SXBATCHER_batch_manager(object):
             file_path = asset.replace('//', os.path.sep)
             source_files.append(os.path.join(asset_path, file_path))
         if len(source_files) > 0:
-            print(f'\n{sxglobals.nodename} source files:')
+            print(f'\nNode {sxglobals.ip_addr} source files:')
             for file in source_files:
                 print(file)
 
@@ -526,19 +470,16 @@ class SXBATCHER_batch_manager(object):
             node_ip = node[0]
             node_tasks[node_ip] = []
 
-        i = 0
-        while i < workload:
+        while workload > 0:
             for node in sxglobals.nodes:
                 node_ip = node[0]
-                cores = node[3]
-                for j in range(int(cores)):
-                    if (j+i) < workload:
+                cores = int(node[3])
+                for i in range(cores):
+                    if workload > i:
                         task_list = node_tasks[node_ip]
-                        task_list.append(tasks[j+i])
+                        task_list.append(tasks[len(tasks) - workload])
                         node_tasks[node_ip] = task_list
-                    else:
-                        break
-                i += j
+                        workload -= 1
 
         return node_tasks
 
@@ -566,19 +507,13 @@ class SXBATCHER_batch_local(object):
 
         if debug:
             batch_args.extend(["-d"])
-
         batch_args.extend(["--"])
-
         batch_args.extend(["-x", export_path])
-
         batch_args.extend(["-l", sxtools_path])
-
         if subdivision is not None:
             batch_args.extend(["-sd", subdivision])
-
         if palette is not None:
             batch_args.extend(["-sp", palette])
-
         if staticvertexcolors:
             batch_args.extend(["-st"])
 
@@ -605,7 +540,7 @@ class SXBATCHER_batch_local(object):
 
 
     def worker_spawner(self, tasks, num_cores):
-        print(f'{sxglobals.nodename} spawning workers')
+        print(f'Node {sxglobals.ip_addr} spawning workers')
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
@@ -614,13 +549,13 @@ class SXBATCHER_batch_local(object):
                     sxglobals.errors.append(error)
 
         sxglobals.now = time.perf_counter()
-        print(f'{sxglobals.nodename}: {len(sxglobals.export_objs)} objects exported in {sxglobals.now-sxglobals.then: .2f} seconds\n')
+        print(f'Node {sxglobals.ip_addr}: {len(sxglobals.export_objs)} objects exported in {sxglobals.now-sxglobals.then: .2f} seconds\n')
         if len(sxglobals.errors) > 0:
-            print(f'{sxglobals.nodename}: Errors in:')
+            print(f'Node {sxglobals.ip_addr}: Errors in:')
             for file in sxglobals.errors:
                 print(file)
+    
         # and then transfer files to taskmaster
-
         # if 'master' in tasks[0]:
         if sxglobals.share_cpus or sxglobals.use_network_nodes:
             for_transfer = []
@@ -969,7 +904,7 @@ class SXBATCHER_gui(object):
 
 
     def handle_click_add_category(self, event):
-        self.lb_export = self.list_category(sxglobals.category, self.lb_export)
+        self.lb_export = self.list_category(sxglobals.active_category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
 
@@ -1006,7 +941,7 @@ class SXBATCHER_gui(object):
         tags = ''
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
         for obj in selected_item_list:
-            for obj_dict in sxglobals.catalogue[sxglobals.category].values():
+            for obj_dict in sxglobals.catalogue[sxglobals.active_category].values():
                 if obj in obj_dict['objects']:
                     for tag in obj_dict['tags']:
                         tags += tag + ' '
@@ -1052,7 +987,7 @@ class SXBATCHER_gui(object):
             self.lb_items.delete(0, 'end')
         else:
             self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
-        self.lb_items = self.list_category(sxglobals.category, self.lb_items)
+        self.lb_items = self.list_category(sxglobals.active_category, self.lb_items)
 
 
     def clear_selection(self, event):
@@ -1108,17 +1043,17 @@ class SXBATCHER_gui(object):
 
     def draw_window(self):
         def display_selected(choice):
-            sxglobals.category = self.cat_var.get()
+            sxglobals.active_category = self.cat_var.get()
             self.refresh_lb_items()
             self.label_item_count.configure(text='Items: '+str(self.lb_items.size()))
 
 
         def refresh_catalogue_view():
             sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-            sxglobals.categories = list(sxglobals.catalogue.keys())
-            sxglobals.category = sxglobals.categories[0]
-            self.cat_var.set(sxglobals.category)
-            self.dropdown['values'] = sxglobals.categories
+            categories = list(sxglobals.catalogue.keys())
+            sxglobals.active_category = categories[0]
+            self.cat_var.set(sxglobals.active_category)
+            self.dropdown['values'] = categories
             display_selected(self.cat_var.get())
 
 
@@ -1176,6 +1111,21 @@ class SXBATCHER_gui(object):
 
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
+            cpu_count = multiprocessing.cpu_count()
+
+            try:
+                cores = core_count_int.get()
+            except Exception:
+                cores = 0
+
+            if cores < 0:
+                sxglobals.shared_cores = 0
+                core_count_int.set(0)
+            elif cores > cpu_count:
+                sxglobals.shared_cores = cpu_count
+                core_count_int.set(cpu_count)
+            else:
+                sxglobals.shared_cores = cores
 
             if self.file_receiving_thread is None:
                 if sxglobals.share_cpus:
@@ -1219,20 +1169,6 @@ class SXBATCHER_gui(object):
                     self.broadcast_thread.stop()
                     if __debug__:
                         print('SX Batcher: Node broadcasting stopped')                  
-
-            try:
-                cores = core_count_int.get()
-            except Exception:
-                cores = 0
-
-            if cores < 0:
-                sxglobals.shared_cores = 0
-                core_count_int.set(0)
-            elif cores > sxglobals.num_cores:
-                sxglobals.shared_cores = sxglobals.num_cores
-                core_count_int.set(sxglobals.num_cores)
-            else:
-                sxglobals.shared_cores = cores
 
 
         def update_use_nodes(var, index, mode):
@@ -1323,11 +1259,11 @@ class SXBATCHER_gui(object):
 
         # Category OptionMenu
         self.cat_var = tk.StringVar()
-        self.cat_var.set(sxglobals.category)
+        self.cat_var.set(sxglobals.active_category)
 
         # refresh_catalogue_view()
         self.dropdown = ttk.Combobox(self.frame_a, textvariable=self.cat_var)
-        self.dropdown['values'] = sxglobals.categories
+        self.dropdown['values'] = list(sxglobals.catalogue.keys())
         self.dropdown['state'] = 'readonly'
         self.dropdown.pack(side='top', anchor='nw', expand=False)
 
@@ -1565,7 +1501,7 @@ class SXBATCHER_gui(object):
         use_nodes_bool.trace_add('write', update_use_nodes)
         core_count_int.trace_add('write', update_share_cpus)
 
-        c5 = tk.Checkbutton(self.tab3, text='Share CPU Cores ('+str(sxglobals.num_cores)+'):', variable=core_count_bool, justify='left', anchor='w')
+        c5 = tk.Checkbutton(self.tab3, text='Share CPU Cores ('+str(multiprocessing.cpu_count())+'):', variable=core_count_bool, justify='left', anchor='w')
         c5.grid(row=2, column=2, sticky='w')
         c6 = tk.Checkbutton(self.tab3, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
         c6.grid(row=3, column=2, sticky='w')

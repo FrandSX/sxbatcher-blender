@@ -61,7 +61,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 65536 # 16384
+        self.buffer_size = 65536 # 4096 # 8192 # 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -652,7 +652,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
 
     def run(self):
-        while not self.stop_event.wait(timeout=5):
+        while not self.stop_event.wait(timeout=self.timeout):
             self.sock.sendto(self.payload, (self.group, self.port))
             if __debug__:
                 print("sent: {}".format(self.payload))
@@ -666,14 +666,11 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
     def __init__(self, group, port, timeout=5):
         super().__init__()
         self.stop_event = threading.Event()
-        self.group = group
-        self.port = port
-        self.timeout = timeout
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.settimeout(5)
-        self.sock.bind(('', self.port))
-        packed = struct.pack('=4sl', socket.inet_aton(self.group), socket.INADDR_ANY)
+        self.sock.settimeout(timeout)
+        self.sock.bind(('', port))
+        packed = struct.pack('=4sl', socket.inet_aton(group), socket.INADDR_ANY)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
 
 
@@ -685,7 +682,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
     def run(self):
         while not self.stop_event.is_set():
             try:
-                received, address = self.sock.recvfrom(1024)
+                received, address = self.sock.recvfrom(sxglobals.buffer_size)
                 fields = json.loads(received)
             except (TimeoutError, OSError):
                 received, address, fields = (None, None, None)

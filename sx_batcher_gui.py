@@ -1,3 +1,4 @@
+from sqlite3 import Time
 import threading
 import subprocess
 import multiprocessing
@@ -201,19 +202,23 @@ class SXBATCHER_init(object):
         # for file, size in sizemap.items():
         #     print(f'\t{file}: {size}')
         # open TCP socket in context manager
-        with socket.create_connection(address, timeout=20) as sock:
-            # send file:size json
-            sock.send(payload)
-            time.sleep(0.1)
-            sock.send(json.dumps(sizemap).encode('utf-8'))
-            time.sleep(0.1)
-            # for each file, read as binary and shove into socket
-            for file in files:
-                with open(file, 'rb') as f:
-                    print(f'[+] transfering {file}... ', end='')
-                    while chunk := f.read(bufsize):
-                        sock.send(chunk)
-                print('done')
+        try:
+            with socket.create_connection(address, timeout=20) as sock:
+                # send file:size json
+                sock.send(payload)
+                time.sleep(0.1)
+                sock.send(json.dumps(sizemap).encode('utf-8'))
+                time.sleep(0.1)
+                # for each file, read as binary and shove into socket
+                for file in files:
+                    with open(file, 'rb') as f:
+                        print(f'[+] transfering {file}... ', end='')
+                        while chunk := f.read(bufsize):
+                            sock.send(chunk)
+                    print('done')
+            return True
+        except (ConnectionResetError, TimeoutError) as error:
+            return False
 
 
 # ------------------------------------------------------------------------
@@ -375,7 +380,10 @@ class SXBATCHER_batch_manager(object):
                         source_files.insert(0, payload)
 
                         if len(source_files) > 0:
-                            init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files)
+                            if init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files):
+                                pass
+                            else:
+                                self.finish_task(reset=True)
                 else:
                     self.finish_task(reset=True)
             else:
@@ -627,7 +635,10 @@ class SXBATCHER_batch_local(object):
 
             if len(for_transfer) > 0:
                 for_transfer.insert(0, json.dumps(payload).encode('utf-8'))
-                init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), for_transfer)
+                if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), for_transfer):
+                    pass
+                else:
+                    print('SX Batcher: Failed to transfer result files')
 
 
 # ------------------------------------------------------------------------
@@ -1479,3 +1490,6 @@ if __name__ == '__main__':
         gui.discovery_thread.stop()
     if gui.file_receiving_thread is not None:
         gui.file_receiving_thread.stop()
+
+# Todo:
+# - Handle connection errors and timeouts gracefully

@@ -61,6 +61,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
+        self.buffer_size = 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -189,7 +190,7 @@ class SXBATCHER_init(object):
 
     # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, files):
-        bufsize = 4096
+        bufsize = sxglobals.buffer_size
         # sizemap should be
         # filename:size
         # doesn't matter how you get there
@@ -355,7 +356,6 @@ class SXBATCHER_batch_manager(object):
                         source_files = []
                         for i, task in enumerate(task_list):
                             file_path = task['asset'].replace('//', os.path.sep)
-                            print('file path:', file_path)
                             source_files.append(pathlib.Path(os.path.join(sxglobals.asset_path, file_path)))
                             node_tasks[node_ip][i]['asset'] = os.path.basename(task['asset'])
                         payload = json.dumps(node_tasks[node_ip]).encode('utf-8')
@@ -693,7 +693,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
         super().__init__()
         self.stop_event = threading.Event()
-        self.bufsize = 4096
+        self.bufsize = sxglobals.buffer_size
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
         self.sock.settimeout(15)
@@ -730,7 +730,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
-                        print('ffs:', file, size)
                         # check remaining data size is more than zero
                         # read bufsize if there's more than bufsize left
                         # else modulo

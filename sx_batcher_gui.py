@@ -348,7 +348,8 @@ class SXBATCHER_batch_manager(object):
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
                 if len(node_tasks) > 0:
-                    print('braap')
+                    # Track tasked nodes, check completions in file_listener_thread
+                    sxglobals.tasked_nodes = list(node_tasks.keys())
                     for node_ip, task_list in node_tasks.items():
                         # Submit files to node
                         source_files = []
@@ -599,7 +600,6 @@ class SXBATCHER_batch_local(object):
                 print(file)
     
         # and then transfer files to taskmaster
-        # if 'master' in tasks[0]:
         if sxglobals.share_cpus or sxglobals.use_network_nodes:
             for_transfer = []
             payload = [{'magic': 'ankdf89d'}]
@@ -741,6 +741,12 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         print(f' {f.tell()}/{size}')
 
                 conn.close()
+
+                if addr in sxglobals.tasked_nodes:
+                    sxglobals.tasked_nodes.remove(addr)
+                    if len(sxglobals.tasked_nodes) == 0:
+                        sxglobals.now = time.perf_counter()
+                        manager.finish_task()
 
                 if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
                     sxglobals.master_node = task_data[0]['master']

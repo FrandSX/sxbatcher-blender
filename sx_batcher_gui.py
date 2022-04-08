@@ -755,7 +755,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
-                if addr[0] in sxglobals.tasked_nodes:
+                if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
                     sxglobals.tasked_nodes.remove(addr[0])
                     if len(sxglobals.tasked_nodes) == 0:
                         sxglobals.now = time.perf_counter()

@@ -61,7 +61,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 16384
+        self.buffer_size = 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -234,6 +234,7 @@ class SXBATCHER_batch_manager(object):
         sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
 
         source_assets = []
+        changed_assets = []
         for obj in sxglobals.export_objs:
             for category in sxglobals.catalogue:
                 for asset, obj_dict in sxglobals.catalogue[category].items():
@@ -243,13 +244,21 @@ class SXBATCHER_batch_manager(object):
                             if (asset not in current_revisions.keys()):
                                 new_revisions[asset] = revision
                                 source_assets.append((asset, int(obj_dict['cost'])))
+                                changed_assets.append(asset)
                             elif (asset in current_revisions.keys()) and (int(current_revisions[asset]) < int(revision)):
                                 new_revisions[asset] = revision
                                 source_assets.append((asset, int(obj_dict['cost'])))
-                            else:
-                                print(f'SX Batcher: No changes in {asset}')
+                                changed_assets.append(asset)
                         else:
                             source_assets.append((asset, int(obj_dict['cost'])))
+
+        if revisions_only and len(changed_assets) > 0:
+            changed_assets = list(set(changed_assets))
+            print('SX Batcher: Revision changed in')
+            for asset in changed_assets:
+                print(f'\t{asset}')
+        elif revisions_only and len(changed_assets) == 0:
+            print('SX Batcher: No revision changes in selected assets')
 
         source_assets = list(set(source_assets))
 
@@ -290,6 +299,17 @@ class SXBATCHER_batch_manager(object):
         init.save_json(file_path, file_dict)
 
 
+    def delete_submissions(self):
+        deleted = False
+        with os.scandir(os.path.realpath('batch_submissions')) as submissions:
+            for file in submissions:
+                if file.name.endswith('.blend') and file.is_file():
+                    deleted = True
+                    os.remove(file)
+        if deleted:
+            print('SX Batcher: Cleaned batch_submissions folder')
+
+
     def finish_task(self, reset=False):
         if reset:
             label_string = 'No Changes!'
@@ -313,14 +333,7 @@ class SXBATCHER_batch_manager(object):
         sxglobals.remote_assignment = []
 
         if sxglobals.share_cpus:
-            deleted = False
-            with os.scandir(os.path.realpath('batch_submissions')) as submissions:
-                for file in submissions:
-                    if file.name.endswith('.blend') and file.is_file():
-                        deleted = True
-                        os.remove(file)
-            if deleted:
-                print('SX Batcher: Cleaned batch_submissions folder')
+            self.delete_submissions()
 
 
     # Handles task assignments:

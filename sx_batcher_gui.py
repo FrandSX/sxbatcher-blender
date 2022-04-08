@@ -355,6 +355,7 @@ class SXBATCHER_batch_manager(object):
                         source_files = []
                         for i, task in enumerate(task_list):
                             file_path = task['asset'].replace('//', os.path.sep)
+                            print('file path:', file_path)
                             source_files.append(pathlib.Path(os.path.join(sxglobals.asset_path, file_path)))
                             node_tasks[node_ip][i]['asset'] = os.path.basename(task['asset'])
                         payload = json.dumps(node_tasks[node_ip]).encode('utf-8')
@@ -669,7 +670,6 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 
 
     def run(self):
-        # while not self.stop_event.wait(timeout=5):
         while not self.stop_event.is_set():
             try:
                 received, address = self.sock.recvfrom(1024)
@@ -682,6 +682,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                 sxglobals.nodes = list(set(nodes))
                 gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
+                gui.toggle_batch_button()
 
 
 # ------------------------------------------------------------------------
@@ -742,8 +743,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
-                if addr in sxglobals.tasked_nodes:
-                    sxglobals.tasked_nodes.remove(addr)
+                if addr[0] in sxglobals.tasked_nodes:
+                    sxglobals.tasked_nodes.remove(addr[0])
                     if len(sxglobals.tasked_nodes) == 0:
                         sxglobals.now = time.perf_counter()
                         manager.finish_task()
@@ -910,7 +911,9 @@ class SXBATCHER_gui(object):
 
 
     def toggle_batch_button(self):
-        if (init.validate_paths() and (self.lb_export.size() > 0)):
+        if not sxglobals.use_network_nodes and init.validate_paths() and (self.lb_export.size() > 0):
+            self.button_batch['state'] = 'normal'
+        elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and init.validate_paths() and (self.lb_export.size() > 0):
             self.button_batch['state'] = 'normal'
         else:
             self.button_batch['state'] = 'disabled'
@@ -929,7 +932,11 @@ class SXBATCHER_gui(object):
 
     def update_node_grid_data(self):
         table_data = [['IP Address', 'Host Name', 'System', 'Cores', 'Status']]
-        for node in sxglobals.nodes:
+        if len(sxglobals.nodes) == 0:
+            nodes = [['', '', '', '', '']] * 10
+        else:
+            nodes = sxglobals.nodes
+        for node in nodes:
             node_row = []
             for item in node:
                 node_row.append(item)
@@ -1019,6 +1026,18 @@ class SXBATCHER_gui(object):
         def update_share_cpus(var, index, mode):
             sxglobals.share_cpus = core_count_bool.get()
             cpu_count = multiprocessing.cpu_count()
+    
+            if not sxglobals.share_cpus or not sxglobals.use_network_nodes:
+                disabled = None
+                for i, node in enumerate(sxglobals.nodes):
+                    if sxglobals.ip_addr in node:
+                        disabled = i
+                        break
+                if disabled is not None:
+                    sxglobals.nodes.pop(disabled)
+
+                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
+                gui.toggle_batch_button()
 
             try:
                 cores = core_count_int.get()
@@ -1080,6 +1099,13 @@ class SXBATCHER_gui(object):
 
         def update_use_nodes(var, index, mode):
             sxglobals.use_network_nodes = use_nodes_bool.get()
+
+            if not sxglobals.use_network_nodes:
+                sxglobals.nodes = []
+                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
+                gui.toggle_batch_button()
+
+
             if self.discovery_thread is None:
                 if sxglobals.use_network_nodes:
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)

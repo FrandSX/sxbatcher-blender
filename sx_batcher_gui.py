@@ -377,6 +377,9 @@ class SXBATCHER_batch_manager(object):
             if sxglobals.use_network_nodes:
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
+                print(f'SX Batcher: Node workload distribution')
+                for node, tasks in node_tasks.items():
+                    print(f'\tNode {node} - {len(tasks)} tasks')
                 if len(node_tasks) > 0:
                     # Track tasked nodes, check completions in file_listener_thread
                     sxglobals.tasked_nodes = list(node_tasks.keys())
@@ -519,21 +522,23 @@ class SXBATCHER_batch_manager(object):
 
             method = 2  # 1 naive, 2 cost-based
             if method == 1:
+                print('naive')
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)
                 while workload > 0:
                     for node in sxglobals.nodes:
                         node_ip = node[0]
                         cores = int(node[3])
-                        task_list = node_tasks[node_ip]
+                        task_list = []
                         for i in range(cores):
                             if workload > i:
                                 task_list.append(tasks[len(tasks) - workload])
-                                node_tasks[node_ip] = task_list
                                 workload -= 1
+                        node_tasks[node_ip].append(task_list)
 
             elif method == 2:
                 # Cost based method: Divide tasks per node
+                print('costing')
                 total_cores = 0
                 for node in sxglobals.nodes:
                     total_cores += int(node[3])
@@ -543,27 +548,21 @@ class SXBATCHER_batch_manager(object):
                     total_cost += asset[1]
 
                 # Allocate (and adjust) work share bias
-                work_shares = [0] * len(sxglobals.nodes)
                 start = 0
-                for j, node in enumerate(sxglobals.nodes):
+                for node in sxglobals.nodes:
+                    node_ip = node[0]
                     num_cores = int(node[3])
-                    task_list = node_tasks[node_ip]
+                    task_list = []
                     bias = 0
-                    work_load = 0
-                    work_share = total_cost * ((float(num_cores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+                    cost_share = total_cost * ((float(num_cores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
 
-                    for k in range(start, len(source_assets)):
-                        if (work_load + source_assets[k][1]) < work_share:
-                            task_list.append(tasks[k])
-                            node_tasks[node_ip] = task_list
-                            work_load += source_assets[k][1]
-                            start += 1
-                        elif j+1 == len(sxglobals.nodes):
-                            task_list.append(tasks[k])
-                            work_load += source_assets[k][1]
+                    for i in range(start, len(tasks)):
+                        if cost_share > 0:
+                            task_list.append(tasks[i])
+                            cost_share -= source_assets[i][1]
                             start += 1
 
-                    work_shares[j] = work_share
+                    node_tasks[node_ip] = task_list
 
         # remove empty task lists
         empty_nodes = []

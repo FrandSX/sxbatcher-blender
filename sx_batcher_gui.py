@@ -1,4 +1,5 @@
 from sqlite3 import Time
+import sys
 import threading
 import subprocess
 import multiprocessing
@@ -62,7 +63,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 65536  # 4096 # 8192 # 65536 # 16384
+        self.buffer_size = 4096
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -207,8 +208,12 @@ class SXBATCHER_init(object):
         # filename:size
         # doesn't matter how you get there
         # below is a placeholder
-        payload = files.pop(0)
+        payload_tmp = files.pop(0)
+        payload = json.dumps(payload_tmp).encode('utf-8')
+        payload_size = sys.getsizeof(payload)
+        print(f'SX Batcher: Task data size - {payload_size}')
         sizemap = {file.name: file.stat().st_size for file in files}
+        sizemap['task_size'] = payload_size
         # print('[+] files to be transferred:')
         # for file, size in sizemap.items():
         #     print(f'\t{file}: {size}')
@@ -216,9 +221,9 @@ class SXBATCHER_init(object):
         try:
             with socket.create_connection(address, timeout=20) as sock:
                 # send file:size json
-                sock.send(payload)
-                time.sleep(0.1)
                 sock.send(json.dumps(sizemap).encode('utf-8'))
+                time.sleep(0.1)
+                sock.sendall(payload)
                 time.sleep(0.1)
                 # for each file, read as binary and shove into socket
                 for file in files:
@@ -398,8 +403,7 @@ class SXBATCHER_batch_manager(object):
                             task['batch_size'] = str(len(task_list))
                             payload_list.append(task)
 
-                        payload = json.dumps(payload_list).encode('utf-8')
-                        source_files.insert(0, payload)
+                        source_files.insert(0, payload_list)
 
                         if len(source_files) > 0:
                             if init.transfer_files((node_ip, sxglobals.file_transfer_port), source_files):
@@ -659,7 +663,7 @@ class SXBATCHER_batch_local(object):
                         payload[0][file] = os.path.basename(root)
 
             if len(for_transfer) > 0:
-                for_transfer.insert(0, json.dumps(payload).encode('utf-8'))
+                for_transfer.insert(0, payload)
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), for_transfer):
                     pass
                 else:
@@ -764,8 +768,18 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 self.sock.listen()
                 conn, addr = self.sock.accept()
                 print(f'[+] got connection {addr}')
-                task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+
+                # task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+
+                left = int(transfer_data['task_size'])
+                b = b''
+                while left:
+                    quot, remain = divmod(left, self.bufsize)
+                    b += conn.recv(self.bufsize if quot else remain)
+                    left -= sys.getsizeof(b)
+                task_data = json.loads(b.decode('utf-8'))
+                del transfer_data['task_size']
 
                 transfer_data = {pathlib.Path(key).name: int(val) for key, val in transfer_data.items()}
                 for file, size in transfer_data.items():

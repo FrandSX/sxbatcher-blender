@@ -62,7 +62,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 4096  # 8192 # 65536 # 16384
+        self.buffer_size = 65536  # 4096 # 8192 # 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -395,6 +395,7 @@ class SXBATCHER_batch_manager(object):
                         payload_list = []
                         for task in task_list:
                             task['asset'] = os.path.basename(task['asset'])
+                            task['batch_size'] = str(len(task_list))
                             payload_list.append(task)
 
                         payload = json.dumps(payload_list).encode('utf-8')
@@ -522,7 +523,6 @@ class SXBATCHER_batch_manager(object):
 
             method = 2  # 1 naive, 2 cost-based
             if method == 1:
-                print('naive')
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)
                 while workload > 0:
@@ -538,7 +538,6 @@ class SXBATCHER_batch_manager(object):
 
             elif method == 2:
                 # Cost based method: Divide tasks per node
-                print('costing')
                 total_cores = 0
                 for node in sxglobals.nodes:
                     total_cores += int(node[3])

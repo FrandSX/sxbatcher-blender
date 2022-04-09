@@ -35,7 +35,7 @@ class SXBATCHER_globals(object):
         self.then = None
         self.now = None
 
-        self.update_repo = False # call all nodes to update their plastic repos
+        self.update_repo = False  # call all nodes to update their plastic repos
 
         # Batch lists
         self.export_objs = None
@@ -62,7 +62,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 65536 # 4096 # 8192 # 65536 # 16384
+        self.buffer_size = 65536  # 4096 # 8192 # 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -97,7 +97,7 @@ class SXBATCHER_init(object):
             sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
             sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
         else:
-            sxglobals.catalogue = {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
+            sxglobals.catalogue = {'empty': {'empty': {'objects': ['empty', ], 'tags': ['empty', ]}}}
 
         sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
 
@@ -186,7 +186,7 @@ class SXBATCHER_init(object):
             return self.load_json(catalogue_path)
         else:
             print(f'Node {sxglobals.ip_addr} Error: Invalid Catalogue path')
-            return {'empty': {'empty':{'objects':['empty', ], 'tags':['empty', ]}}}
+            return {'empty': {'empty': {'objects': ['empty', ], 'tags': ['empty', ]}}}
 
 
     # files are path objects, address is a tuple of IP address and port
@@ -197,7 +197,7 @@ class SXBATCHER_init(object):
         # doesn't matter how you get there
         # below is a placeholder
         payload = files.pop(0)
-        sizemap = {file.name:file.stat().st_size for file in files}
+        sizemap = {file.name: file.stat().st_size for file in files}
         # print('[+] files to be transferred:')
         # for file, size in sizemap.items():
         #     print(f'\t{file}: {size}')
@@ -270,7 +270,7 @@ class SXBATCHER_batch_manager(object):
         # current_revisions.update(new_revisions)
         # init.save_json(revision_path, current_revisions)
 
-        source_assets.sort(key = lambda x: x[1], reverse=True)
+        source_assets.sort(key=lambda x: x[1], reverse=True)
         source_files = []
         for asset in source_assets:
             source_files.append(asset[0])
@@ -499,7 +499,7 @@ class SXBATCHER_batch_manager(object):
                 node_ip = node[0]
                 node_tasks[node_ip] = []
 
-            method = 2 # 1 naive, 2 cost-based
+            method = 2  # 1 naive, 2 cost-based
             if method == 1:
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)
@@ -515,7 +515,7 @@ class SXBATCHER_batch_manager(object):
                                 workload -= 1
 
             elif method == 2:
-                # Cost based method: Divide tasks per node 
+                # Cost based method: Divide tasks per node
                 total_cores = 0
                 for node in sxglobals.nodes:
                     total_cores += int(node[3])
@@ -734,14 +734,12 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         while not self.stop_event.is_set():
             try:
                 self.sock.listen()
-                """ accept() returns a new socket 
-                for some unfathomable reason """
                 conn, addr = self.sock.accept()
                 print(f'[+] got connection {addr}')
                 task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
 
-                transfer_data = {pathlib.Path(key).name:int(val) for key, val in transfer_data.items()}
+                transfer_data = {pathlib.Path(key).name: int(val) for key, val in transfer_data.items()}
                 for file, size in transfer_data.items():
                     if task_data[0]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
@@ -1095,7 +1093,7 @@ class SXBATCHER_gui(object):
                 elif not sxglobals.share_cpus and self.broadcast_thread.is_alive() and not sxglobals.use_network_nodes:
                     self.broadcast_thread.stop()
                     if __debug__:
-                        print('SX Batcher: File receiving stopped')    
+                        print('SX Batcher: File receiving stopped')
 
             if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
@@ -1114,7 +1112,7 @@ class SXBATCHER_gui(object):
                 elif not sxglobals.share_cpus and self.broadcast_thread.is_alive():
                     self.broadcast_thread.stop()
                     if __debug__:
-                        print('SX Batcher: Node broadcasting stopped')                  
+                        print('SX Batcher: Node broadcasting stopped')
 
 
         def update_use_nodes(var, index, mode):
@@ -1167,7 +1165,7 @@ class SXBATCHER_gui(object):
                 elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
                     self.file_receiving_thread.stop()
                     if __debug__:
-                        print('SX Batcher: File receiving stopped')    
+                        print('SX Batcher: File receiving stopped')
 
 
         def browse_button_bp():
@@ -1201,7 +1199,7 @@ class SXBATCHER_gui(object):
         self.tabs.add(tab1, text='Catalogue')
         self.tabs.add(tab2, text='Settings')
         self.tabs.add(self.tab3, text='Network')
-        self.tabs.pack(expand = 1, fill ="both")
+        self.tabs.pack(expand=1, fill="both")
 
         # Content Tab ---------------------------------------------------------
         self.frame_a = tk.Frame(master=tab1, bd=10)
@@ -1236,7 +1234,7 @@ class SXBATCHER_gui(object):
         self.label_item_count.pack()
 
         button_clear_selection = tk.Button(
-            master = self.frame_a,
+            master=self.frame_a,
             text="Clear Selection",
             width=20,
             height=3,
@@ -1246,21 +1244,21 @@ class SXBATCHER_gui(object):
 
         # Frame B
         button_add_catalogue = tk.Button(
-            master = self.frame_b,
+            master=self.frame_b,
             text="Add all from Catalogue",
             width=20,
             height=3,
         )
         button_add_catalogue.pack(pady=20)
         button_add_category = tk.Button(
-            master = self.frame_b,
+            master=self.frame_b,
             text="Add all from Category",
             width=20,
             height=3,
         )
         button_add_category.pack()
         button_add_selected = tk.Button(
-            master = self.frame_b,
+            master=self.frame_b,
             text="Add Selected",
             width=20,
             height=3,
@@ -1272,7 +1270,7 @@ class SXBATCHER_gui(object):
         tag_entry = tk.Entry(master=self.frame_b, textvariable=self.var_tag)
         tag_entry.pack()
         button_add_tagged = tk.Button(
-            master = self.frame_b,
+            master=self.frame_b,
             text="Add Tagged",
             width=20,
             height=3,
@@ -1281,7 +1279,7 @@ class SXBATCHER_gui(object):
 
 
         button_clear_exports = tk.Button(
-            master = self.frame_b,
+            master=self.frame_b,
             text="Clear Batch List",
             width=20,
             height=3,
@@ -1316,7 +1314,7 @@ class SXBATCHER_gui(object):
         self.label_export_item_count.pack()
 
         self.button_batch = tk.Button(
-            master = self.frame_c,
+            master=self.frame_c,
             text='Start Batch',
             width=20,
             height=3,
@@ -1351,10 +1349,10 @@ class SXBATCHER_gui(object):
         l4 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
         l4.grid(row=5, column=1, sticky='w', padx=10)
 
-        e1_str=tk.StringVar(self.window)
-        e2_str=tk.StringVar(self.window)
-        e3_str=tk.StringVar(self.window)
-        e4_str=tk.StringVar(self.window)
+        e1_str = tk.StringVar(self.window)
+        e2_str = tk.StringVar(self.window)
+        e3_str = tk.StringVar(self.window)
+        e4_str = tk.StringVar(self.window)
 
         e1_str.set(sxglobals.blender_path)
         e2_str.set(sxglobals.sxtools_path)
@@ -1398,8 +1396,8 @@ class SXBATCHER_gui(object):
         c3_bool = tk.BooleanVar(self.window)
         c4_bool = tk.BooleanVar(self.window)
         c5_bool = tk.BooleanVar(self.window)
-        e5_str=tk.StringVar(self.window)
-        e6_int=tk.IntVar(self.window, value=0)
+        e5_str = tk.StringVar(self.window)
+        e6_int = tk.IntVar(self.window, value=0)
 
         c1_bool.set(sxglobals.palette)
         c2_bool.set(sxglobals.subdivision)
@@ -1444,7 +1442,7 @@ class SXBATCHER_gui(object):
 
         core_count_bool = tk.BooleanVar(self.window)
         use_nodes_bool = tk.BooleanVar(self.window)
-        core_count_int=tk.IntVar(self.window)
+        core_count_int = tk.IntVar(self.window)
 
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)

@@ -62,7 +62,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 65536  # 4096 # 8192 # 65536 # 16384
+        self.buffer_size = 4096 # 8192 # 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -114,6 +114,17 @@ class SXBATCHER_init(object):
         finally:
             s.close()
         return ip
+
+
+    def payload(self):
+        return {
+            "magic": sxglobals.magic,
+            "address": sxglobals.ip_addr,
+            "host": socket.gethostname(),
+            "system": platform.system(),
+            "cores": str(sxglobals.shared_cores),
+            "status": "Busy" if sxglobals.node_busy_status else "Idle"
+        }
 
 
     def load_json(self, file_path):
@@ -649,7 +660,6 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
     def __init__(self, payload, group, port, timeout=5):
         super().__init__()
         self.stop_event = threading.Event()
-        self.payload = json.dumps(payload).encode('utf-8')
         self.group = group
         self.port = port
         self.timeout = timeout
@@ -664,6 +674,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
     def run(self):
         while not self.stop_event.wait(timeout=self.timeout):
+            self.payload = json.dumps(init.payload()).encode('utf-8')
             self.sock.sendto(self.payload, (self.group, self.port))
             if __debug__:
                 print("sent: {}".format(self.payload))
@@ -699,9 +710,12 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 received, address, fields = (None, None, None)
             
             if (fields is not None) and (fields['magic'] == sxglobals.magic):
-                nodes = sxglobals.nodes
+                nodes = []
+                for i, node in enumerate(sxglobals.nodes):
+                    if node[0] != fields['address']:
+                        nodes.append(node)
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
-                sxglobals.nodes = list(set(nodes))
+                sxglobals.nodes = nodes
                 gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
                 gui.toggle_batch_button()
 
@@ -882,17 +896,6 @@ class SXBATCHER_gui(object):
             manager.task_handler()
 
 
-    def payload(self):
-        return {
-            "magic": sxglobals.magic,
-            "address": sxglobals.ip_addr,
-            "host": socket.gethostname(),
-            "system": platform.system(),
-            "cores": str(sxglobals.shared_cores),
-            "status": "Busy" if sxglobals.node_busy_status else "Idle"
-        }
-
-
     def handle_click_save_settings(self, event):
         init.save_conf()
 
@@ -951,7 +954,7 @@ class SXBATCHER_gui(object):
     def update_node_grid_data(self):
         table_data = [['IP Address', 'Host Name', 'System', 'Cores', 'Status']]
         if len(sxglobals.nodes) == 0:
-            nodes = [['', '', '', '', '']] * 10
+            nodes = [['', '', '', '', '']] * 5
         else:
             nodes = sxglobals.nodes
         for node in nodes:
@@ -1097,7 +1100,7 @@ class SXBATCHER_gui(object):
 
             if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
-                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(self.payload(), sxglobals.group, sxglobals.discovery_port)
+                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
                     self.broadcast_thread.start()
                     if __debug__:
                         print('SX Batcher: Node broadcasting started')
@@ -1105,7 +1108,7 @@ class SXBATCHER_gui(object):
                     pass
             else:
                 if sxglobals.share_cpus and not self.broadcast_thread.is_alive():
-                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(self.payload(), sxglobals.group, sxglobals.discovery_port)
+                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
                     self.broadcast_thread.start()
                     if __debug__:
                         print('SX Batcher: Node broadcasting restarted')

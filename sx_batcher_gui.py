@@ -62,7 +62,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 4096 # 8192 # 65536 # 16384
+        self.buffer_size = 4096  # 8192 # 65536 # 16384
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -367,8 +367,8 @@ class SXBATCHER_batch_manager(object):
         if remote_task:
             # Receive files to be processed from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
-                tasks = self.prepare_received_tasks()
-                t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, sxglobals.shared_cores))
+                remote_tasks = self.prepare_received_tasks()
+                t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
                 t.start()
                 gui.step_check(t)
             else:
@@ -383,11 +383,18 @@ class SXBATCHER_batch_manager(object):
                     for node_ip, task_list in node_tasks.items():
                         # Submit files to node
                         source_files = []
-                        for i, task in enumerate(task_list):
-                            file_path = task['asset'].replace('//', os.path.sep)
-                            source_files.append(pathlib.Path(os.path.join(sxglobals.asset_path, file_path)))
-                            node_tasks[node_ip][i]['asset'] = os.path.basename(task['asset'])
-                        payload = json.dumps(node_tasks[node_ip]).encode('utf-8')
+                        for task in task_list:
+                            file_path = task['asset']
+                            file_path.replace('//', os.path.sep)
+                            source_path = pathlib.Path(os.path.join(sxglobals.asset_path, file_path))
+                            source_files.append(source_path)
+
+                        payload_list = []
+                        for task in task_list:
+                            task['asset'] = os.path.basename(task['asset'])
+                            payload_list.append(task)
+
+                        payload = json.dumps(payload_list).encode('utf-8')
                         source_files.insert(0, payload)
 
                         if len(source_files) > 0:
@@ -399,9 +406,9 @@ class SXBATCHER_batch_manager(object):
                     self.finish_task(reset=True)
             else:
                 # Receive export list created in the UI
-                tasks = self.prepare_local_tasks()
-                if len(tasks) > 0:
-                    t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, multiprocessing.cpu_count()))
+                local_tasks = self.prepare_local_tasks()
+                if len(local_tasks) > 0:
+                    t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
                     t.start()
                     gui.step_check(t)
                 else:
@@ -557,6 +564,15 @@ class SXBATCHER_batch_manager(object):
                             start += 1
 
                     work_shares[j] = work_share
+
+        # remove empty task lists
+        empty_nodes = []
+        for node, tasks in node_tasks.items():
+            if len(tasks) == 0:
+                empty_nodes.append(node)
+        if len(empty_nodes) > 0:
+            for node in empty_nodes:
+                del node_tasks[node]
 
         return node_tasks
 
@@ -957,6 +973,8 @@ class SXBATCHER_gui(object):
             nodes = [['', '', '', '', '']] * 5
         else:
             nodes = sxglobals.nodes
+            nodes.sort(key=lambda x: x[0])
+
         for node in nodes:
             node_row = []
             for item in node:

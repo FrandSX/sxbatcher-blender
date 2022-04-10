@@ -203,17 +203,15 @@ class SXBATCHER_init(object):
 
     # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, files):
+        print('files:', files)
         bufsize = sxglobals.buffer_size
         # sizemap should be
         # filename:size
         # doesn't matter how you get there
         # below is a placeholder
         payload_tmp = files.pop(0)
-        payload = json.dumps(payload_tmp).encode('utf-8')
-        payload_size = sys.getsizeof(payload)
-        print(f'SX Batcher: Task data size - {payload_size}')
         sizemap = {file.name: file.stat().st_size for file in files}
-        sizemap['task_size'] = payload_size
+        sizemap['task_size'] = len(payload_tmp)
         # print('[+] files to be transferred:')
         # for file, size in sizemap.items():
         #     print(f'\t{file}: {size}')
@@ -223,8 +221,9 @@ class SXBATCHER_init(object):
                 # send file:size json
                 sock.send(json.dumps(sizemap).encode('utf-8'))
                 time.sleep(0.1)
-                sock.sendall(payload)
-                time.sleep(0.1)
+                for task in payload_tmp:
+                    sock.sendall(json.dumps(task).encode('utf-8'))
+                    time.sleep(0.1)
                 # for each file, read as binary and shove into socket
                 for file in files:
                     with open(file, 'rb') as f:
@@ -652,17 +651,16 @@ class SXBATCHER_batch_local(object):
     
         # and then transfer files to taskmaster
         if sxglobals.share_cpus or sxglobals.use_network_nodes:
+            payload = []
             for_transfer = []
-            payload = [{'magic': 'ankdf89d'}]
-
             for root, subdirs, files in os.walk('batch_results'):
                 for file in files:
                     if file.endswith('.fbx'):
                         file_path = pathlib.Path(os.path.join(root, file))
+                        payload.append({'magic': 'ankdf89d', file: os.path.basename(root)})
                         for_transfer.append(file_path)
-                        payload[0][file] = os.path.basename(root)
 
-            if len(for_transfer) > 0:
+            if len(payload) > 0:
                 for_transfer.insert(0, payload)
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), for_transfer):
                     pass
@@ -769,24 +767,31 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 conn, addr = self.sock.accept()
                 print(f'[+] got connection {addr}')
 
-                # task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                 transfer_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+                # task_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
 
-                left = int(transfer_data['task_size'])
-                b = b''
-                while left:
-                    quot, remain = divmod(left, self.bufsize)
-                    b += conn.recv(self.bufsize if quot else remain)
-                    left -= sys.getsizeof(b)
-                task_data = json.loads(b.decode('utf-8'))
+                task_data = []
+                batch = int(transfer_data['task_size'])
+                for i in range(batch):
+                    task = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+                    task_data.append(task)
+
+                # while left > 0:
+                #     quot, remain = divmod(left, self.bufsize)
+                #     b += conn.recv(self.bufsize if quot else remain)
+                #     left -= sys.getsizeof(b)
+
+
+                # task_data = json.loads(b.decode('utf-8'))
                 del transfer_data['task_size']
+                print(f'Task data received')
 
                 transfer_data = {pathlib.Path(key).name: int(val) for key, val in transfer_data.items()}
-                for file, size in transfer_data.items():
-                    if task_data[0]['magic'] == sxglobals.magic_task:
+                for i, (file, size) in enumerate(transfer_data.items()):
+                    if task_data[i]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
                     else:
-                        target_dir = os.path.join(os.path.realpath('batch_results_network'), task_data[0][file])
+                        target_dir = os.path.join(os.path.realpath('batch_results_network'), task_data[i][file])
                         os.makedirs(target_dir, exist_ok=True)
 
                     with open(os.path.join(target_dir, file), 'wb') as f:

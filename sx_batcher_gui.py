@@ -203,12 +203,7 @@ class SXBATCHER_init(object):
 
     # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, files):
-        print('files:', files)
         bufsize = sxglobals.buffer_size
-        # sizemap should be
-        # filename:size
-        # doesn't matter how you get there
-        # below is a placeholder
         payload_tmp = files.pop(0)
         sizemap = {file.name: file.stat().st_size for file in files}
         sizemap['task_size'] = len(payload_tmp)
@@ -775,12 +770,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 for i in range(batch):
                     task = json.loads(conn.recv(self.bufsize).decode('utf-8'))
                     task_data.append(task)
-
-                # while left > 0:
-                #     quot, remain = divmod(left, self.bufsize)
-                #     b += conn.recv(self.bufsize if quot else remain)
-                #     left -= sys.getsizeof(b)
-
 
                 # task_data = json.loads(b.decode('utf-8'))
                 del transfer_data['task_size']

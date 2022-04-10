@@ -63,7 +63,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 4096
+        self.buffer_size = 8192
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False

@@ -360,6 +360,7 @@ class SXBATCHER_batch_manager(object):
         sxglobals.node_busy_status = False
         sxglobals.master_node = None
         sxglobals.remote_assignment = []
+        gui.busy_bool.set(False)
 
         if sxglobals.share_cpus:
             self.delete_submissions()
@@ -826,7 +827,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         sxglobals.remote_assignment.append(task)
                         if len(sxglobals.remote_assignment) == int(task['batch_size']):
                             print('SX Batcher: Processing remotely assigned tasks')
-                            manager.task_handler(remote_task=True)
+                            gui.busy_bool.set(True)
 
             except (OSError, TimeoutError) as error:
                 if str(error) != 'timed out':
@@ -862,6 +863,7 @@ class SXBATCHER_gui(object):
         self.broadcast_thread = None
         self.discovery_thread = None
         self.file_receiving_thread = None
+        self.busy_bool = None
         return None
 
 
@@ -1018,6 +1020,11 @@ class SXBATCHER_gui(object):
 
 
     def draw_window(self):
+        def update_remote_process(var, index, mode):
+             if self.busy_bool.get():
+                manager.task_handler(remote_task=True)
+
+
         def display_selected(choice):
             sxglobals.active_category = self.cat_var.get()
             self.refresh_lb_items()
@@ -1508,6 +1515,10 @@ class SXBATCHER_gui(object):
         l_title5.grid(row=4, column=2, padx=10, pady=10)
 
         self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
+
+        busy_bool = tk.BooleanVar(self.window)
+        busy_bool.set(False)
+        busy_bool.trace_add('write', update_remote_process)
 
         self.window.mainloop()
 

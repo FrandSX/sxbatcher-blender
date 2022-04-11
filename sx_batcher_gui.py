@@ -240,7 +240,7 @@ class SXBATCHER_batch_manager(object):
 
         # Also update catalogue in case of new revisions
         sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-        sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
+        sxglobals.active_category = sxglobals.active_category if sxglobals.active_category in sxglobals.catalogue else list(sxglobals.catalogue.keys())[0]
 
         source_assets = []
         changed_assets = []
@@ -1516,7 +1516,6 @@ if __name__ == '__main__':
 # Todo:
 # - Handle use_nodes and share_cpus enabled in save settings
 # - Bad file descriptor error related to file_listener
-# - Bug: condition exists when wrong category is exported
 # - Handle batch_results transfer to export folder
 # - Clean up batch_results on nodes and master
 # - Print statements to use logging instead

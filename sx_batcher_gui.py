@@ -1514,4 +1514,9 @@ if __name__ == '__main__':
         gui.file_receiving_thread.stop()
 
 # Todo:
-# - Handle connection errors and timeouts gracefully
+# - Handle use_nodes and share_cpus enabled in save settings
+# - Bad file descriptor error related to file_listener
+# - Bug: condition exists when wrong category is exported
+# - Handle batch_results transfer to export folder
+# - Clean up batch_results on nodes and master
+# - Print statements to use logging instead

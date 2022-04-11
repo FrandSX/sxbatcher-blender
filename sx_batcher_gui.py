@@ -249,16 +249,20 @@ class SXBATCHER_init(object):
     def transfer_files2(self, address, out_files):
         payload = out_files[0]
         files = out_files[1]
+        sizemap = [(file.name, file.stat().st_size) for file in files]
+        payload.insert(0, sizemap)
+        bufsize = sxglobals.buffer_size
 
         try:
             with socket.create_connection(address, timeout=20) as sock:
                 sock.sendall(json.dumps(payload).encode('utf-8'))
     
-            for file in files:
-                with socket.create_connection(address, timeout=20) as sock:
+            with socket.create_connection(address, timeout=20) as sock:
+                for file in files:
                     with open(file, 'rb') as f:
                         print(f'[+] transfering {file}... ', end='')
-                        sock.sendall(f.read())
+                        while chunk := f.read(bufsize):
+                            sock.send(chunk)
                     print('done')
             return True
         except (ConnectionResetError, TimeoutError):
@@ -880,10 +884,11 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 print(f'Task data received')
                 conn.close()
 
-                for i in range(len(task_data)):
-                    file = task_data[i]['asset']
-                    conn, addr = self.sock.accept()
+                file_meta = task_data.pop(0)
+                transfer_data = [(pathlib.Path(file_and_size[0]).name, int(file_and_size[1])) for file_and_size in file_meta]
 
+                conn, addr = self.sock.accept()
+                for i, (file, size) in enumerate(transfer_data):
                     if task_data[i]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
                     else:
@@ -892,13 +897,13 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
-                        while True:
-                            chunk = conn.recv(self.bufsize)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-
-                    conn.close()
+                        left = size
+                        while left:
+                            quot, remain = divmod(left, self.bufsize)
+                            left -= f.write(conn.recv(self.bufsize if quot else remain))
+                            
+                        print(f' {f.tell()}/{size}')
+                conn.close()
 
                 # check which nodes have finished their tasks based on connection address
                 if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):

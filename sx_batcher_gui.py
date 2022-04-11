@@ -1516,9 +1516,9 @@ class SXBATCHER_gui(object):
 
         self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
 
-        busy_bool = tk.BooleanVar(self.window)
-        busy_bool.set(False)
-        busy_bool.trace_add('write', update_remote_process)
+        self.busy_bool = tk.BooleanVar(self.window)
+        self.busy_bool.set(False)
+        self.busy_bool.trace_add('write', update_remote_process)
 
         self.window.mainloop()
 

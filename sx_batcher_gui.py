@@ -63,7 +63,7 @@ class SXBATCHER_globals(object):
         self.magic_task = 'snaf68yh'
         self.magic_result = 'ankdf89d'
         self.master_node = None
-        self.buffer_size = 1024
+        self.buffer_size = 4096
         self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
@@ -216,16 +216,16 @@ class SXBATCHER_init(object):
         try:
             with socket.create_connection(address, timeout=20) as sock:
                 # send batch counts
-                sock.send(json.dumps(metadata).encode('utf-8'))
+                sock.sendall(json.dumps(metadata).encode('utf-8'))
                 time.sleep(0.1)
                 # send sizemap
                 for file_and_size in sizemap:
-                    sock.send(json.dumps(file_and_size).encode('utf-8'))
+                    sock.sendall(json.dumps(file_and_size).encode('utf-8'))
                     time.sleep(0.1) 
                 time.sleep(0.1)
                 # send tasks
                 for task in payload:
-                    sock.send(json.dumps(task).encode('utf-8'))
+                    sock.sendall(json.dumps(task).encode('utf-8'))
                     time.sleep(0.1)
                 time.sleep(0.1)
                 # for each file, read as binary and shove into socket
@@ -242,6 +242,26 @@ class SXBATCHER_init(object):
                     time.sleep(0.1)
             return True
         except (ConnectionResetError, TimeoutError) as error:
+            return False
+
+
+    # files are path objects, address is a tuple of IP address and port
+    def transfer_files2(self, address, out_files):
+        payload = out_files[0]
+        files = out_files[1]
+
+        try:
+            with socket.create_connection(address, timeout=20) as sock:
+                sock.sendall(json.dumps(payload).encode('utf-8'))
+    
+            for file in files:
+                with socket.create_connection(address, timeout=20) as sock:
+                    with open(file, 'rb') as f:
+                        print(f'[+] transfering {file}... ', end='')
+                        sock.sendall(f.read())
+                    print('done')
+            return True
+        except (ConnectionResetError, TimeoutError):
             return False
 
 
@@ -413,7 +433,7 @@ class SXBATCHER_batch_manager(object):
                             payload.append(task)
 
                         if len(source_files) > 0:
-                            if init.transfer_files((node_ip, sxglobals.file_transfer_port), (payload, source_files)):
+                            if init.transfer_files2((node_ip, sxglobals.file_transfer_port), (payload, source_files)):
                                 pass
                             else:
                                 self.finish_task(reset=True)
@@ -669,7 +689,7 @@ class SXBATCHER_batch_local(object):
                         for_transfer.append(file_path)
 
             if len(payload) > 0:
-                if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
+                if init.transfer_files2((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
                     pass
                 else:
                     print('SX Batcher: Failed to transfer result files')
@@ -763,7 +783,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.sock.close()
 
 
-    def run(self):
+    def run2(self):
         def assemble_data(message_count):
             data = []
             for i in range(message_count):
@@ -813,6 +833,72 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         print(f' {f.tell()}/{size}')
 
                 conn.close()
+
+                # check which nodes have finished their tasks based on connection address
+                if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
+                    sxglobals.tasked_nodes.remove(addr[0])
+                    if len(sxglobals.tasked_nodes) == 0:
+                        sxglobals.now = time.perf_counter()
+                        manager.finish_task()
+
+                if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
+                    sxglobals.master_node = task_data[0]['master']
+                    for task in task_data:
+                        sxglobals.remote_assignment.append(task)
+                        if len(sxglobals.remote_assignment) == int(task['batch_size']):
+                            print('SX Batcher: Processing remotely assigned tasks')
+                            gui.busy_bool.set(True)
+
+            except (OSError, TimeoutError) as error:
+                if str(error) != 'timed out':
+                    print(error)
+
+
+    def run(self):
+        def assemble_data(message_count):
+            data = []
+            for i in range(message_count):
+                message = json.loads(conn.recv(self.bufsize).decode('utf-8'))
+                data.append(message)
+            return data
+
+        os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
+        while not self.stop_event.is_set():
+            try:
+                self.sock.listen()
+                conn, addr = self.sock.accept()
+                print(f'[+] got connection {addr}')
+
+                # receive task data
+                b = bytearray()
+                while True:
+                    chunk = conn.recv(self.bufsize)
+                    if not chunk:
+                        break
+                    b.extend(chunk)
+                task_data = json.loads(b.decode('utf-8'))
+                print(f'Task data received')
+                conn.close()
+
+                for i in range(len(task_data)):
+                    file = task_data[i]['asset']
+                    conn, addr = self.sock.accept()
+
+                    if task_data[i]['magic'] == sxglobals.magic_task:
+                        target_dir = os.path.realpath('batch_submissions')
+                    else:
+                        target_dir = os.path.join(os.path.realpath('batch_results'), task_data[i][file])
+                    os.makedirs(target_dir, exist_ok=True)
+
+                    with open(os.path.join(target_dir, file), 'wb') as f:
+                        print(f'[+] writing into {file}...', end='')
+                        while True:
+                            chunk = conn.recv(self.bufsize)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+
+                    conn.close()
 
                 # check which nodes have finished their tasks based on connection address
                 if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):

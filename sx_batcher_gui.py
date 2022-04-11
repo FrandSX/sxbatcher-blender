@@ -206,7 +206,7 @@ class SXBATCHER_init(object):
         bufsize = sxglobals.buffer_size
         payload = out_files[0]
         files = out_files[1]
-        sizemap = {file.name: file.stat().st_size for file in files}
+        sizemap = [(file.name, file.stat().st_size) for file in files]
         metadata = {'task_count': len(payload), 'file_count': len(files)}
         print(f'Metadata: {metadata}')
         # print('[+] files to be transferred:')
@@ -219,8 +219,8 @@ class SXBATCHER_init(object):
                 sock.send(json.dumps(metadata).encode('utf-8'))
                 time.sleep(0.1)
                 # send sizemap
-                for key, value in sizemap.items():
-                    sock.send(json.dumps({key: value}).encode('utf-8'))
+                for file_and_size in sizemap:
+                    sock.send(json.dumps(file_and_size).encode('utf-8'))
                     time.sleep(0.1) 
                 time.sleep(0.1)
                 # send tasks
@@ -232,9 +232,14 @@ class SXBATCHER_init(object):
                 for file in files:
                     with open(file, 'rb') as f:
                         print(f'[+] transfering {file}... ', end='')
+                        # chunk = f.read(bufsize)
+                        # if not chunk:
+                        #     break
+                        # sock.sendall(chunk)
                         while chunk := f.read(bufsize):
                             sock.send(chunk)
                     print('done')
+                    time.sleep(0.1)
             return True
         except (ConnectionResetError, TimeoutError) as error:
             return False
@@ -765,12 +770,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 data.append(message)
             return data
 
-
-        # create batch submissions folder
-        dir_names = ('batch_submissions', 'batch_results')
-        for dir_name in dir_names:
-            os.makedirs(dir_name, exist_ok=True)
-
+        os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
         while not self.stop_event.is_set():
             try:
                 self.sock.listen()
@@ -778,23 +778,29 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 print(f'[+] got connection {addr}')
 
                 batch_data = json.loads(conn.recv(self.bufsize).decode('utf-8'))
-                transfer_list = assemble_data(int(batch_data['file_count']))
+                transfer_data = assemble_data(int(batch_data['file_count']))
                 task_data = assemble_data(int(batch_data['task_count']))
-                transfer_data = {}
-                for file in transfer_list:
-                    transfer_data.update(file)
                 print(f'Task data received')
 
-                transfer_data = {pathlib.Path(key).name: int(val) for key, val in transfer_data.items()}
-                for i, (file, size) in enumerate(transfer_data.items()):
+                print('batch:', batch_data)
+                print('transfer:', transfer_data)
+                print('task_data:', task_data)
+
+                transfer_data = [(pathlib.Path(file_and_size[0]).name, int(file_and_size[1])) for file_and_size in transfer_data]
+                for i, (file, size) in enumerate(transfer_data):
                     if task_data[i]['magic'] == sxglobals.magic_task:
                         target_dir = os.path.realpath('batch_submissions')
                     else:
                         target_dir = os.path.join(os.path.realpath('batch_results'), task_data[i][file])
-                        os.makedirs(target_dir, exist_ok=True)
+                    os.makedirs(target_dir, exist_ok=True)
 
                     with open(os.path.join(target_dir, file), 'wb') as f:
                         print(f'[+] writing into {file}...', end='')
+                        # while True:
+                        #     chunk = conn.recv(self.bufsize)
+                        #     if not chunk:
+                        #         break
+                        #     f.write(chunk)
                         # check remaining data size is more than zero
                         # read bufsize if there's more than bufsize left
                         # else modulo
@@ -807,6 +813,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                 conn.close()
 
+                # check which nodes have finished their tasks based on connection address
                 if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
                     sxglobals.tasked_nodes.remove(addr[0])
                     if len(sxglobals.tasked_nodes) == 0:

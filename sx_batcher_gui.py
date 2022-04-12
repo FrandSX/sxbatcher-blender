@@ -349,7 +349,7 @@ class SXBATCHER_batch_manager(object):
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
 
         gui.label_progress.configure(text=label_string)
-        gui.button_batch['state'] = 'normal'
+        gui.button_start_batch['state'] = 'normal'
         gui.progress_bar['value'] = 0
         sxglobals.errors = []
         sxglobals.node_busy_status = False
@@ -842,7 +842,7 @@ class SXBATCHER_gui(object):
         self.var_item_count = None
         self.var_export_count = None
         self.var_tag = None
-        self.button_batch = None
+        self.button_start_batch = None
         self.progress_bar = None
         self.label_progress = None
         self.table_nodes = None
@@ -862,7 +862,7 @@ class SXBATCHER_gui(object):
         return lb
 
 
-    def handle_click_add_catalogue(self, event):
+    def handle_click_batch_catalogue(self, event):
         self.lb_export.delete(0, 'end')
         for category in sxglobals.catalogue:
             self.lb_export = self.list_category(category, self.lb_export)
@@ -870,13 +870,13 @@ class SXBATCHER_gui(object):
         self.toggle_batch_button()
 
 
-    def handle_click_add_category(self, event):
+    def handle_click_batch_category(self, event):
         self.lb_export = self.list_category(sxglobals.active_category, self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
 
 
-    def handle_click_add_selected(self, event):
+    def handle_click_batch_selected(self, event):
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
         for value in selected_item_list:
             self.lb_export.insert('end', value)
@@ -884,7 +884,7 @@ class SXBATCHER_gui(object):
         self.toggle_batch_button()
 
 
-    def handle_click_add_tagged(self, event):
+    def handle_click_batch_tagged(self, event):
         tag = self.var_tag.get()
         for category in sxglobals.catalogue:
             for obj_dict in sxglobals.catalogue[category].values():
@@ -905,20 +905,31 @@ class SXBATCHER_gui(object):
 
 
     def handle_click_listboxselect(self, event):
-        tags = ''
+        tags = []
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
         for obj in selected_item_list:
             for obj_dict in sxglobals.catalogue[sxglobals.active_category].values():
                 if obj in obj_dict['objects']:
                     for tag in obj_dict['tags']:
-                        tags += tag + ' '
-            tags = tags + '\n'
-        self.label_found_tags.configure(text='Tags in Selected:\n\n'+tags)
+                        tags.append(tag)
+
+        # sort tags by frequency, remove duplicates
+        tags = sorted(tags, key=tags.count, reverse=True)
+        tags = list(dict.fromkeys(tags))
+
+        tag_string = ''
+        for i, tag in enumerate(tags):
+            tag_string += tag + ' '
+            j = i + 1
+            if (j % 5 == 0):
+                tag_string += '\n'
+        tag_string += '\n'
+        self.label_found_tags.configure(text='Tags in Selected:\n\n'+tag_string)
 
 
     def handle_click_start_batch(self, event):
-        if (self.button_batch['state'] == 'normal') or (self.button_batch['state'] == 'active'):
-            self.button_batch['state'] = 'disabled'
+        if (self.button_start_batch['state'] == 'normal') or (self.button_start_batch['state'] == 'active'):
+            self.button_start_batch['state'] = 'disabled'
 
             manager.task_handler()
 
@@ -960,11 +971,11 @@ class SXBATCHER_gui(object):
 
     def toggle_batch_button(self):
         if not sxglobals.use_network_nodes and init.validate_paths() and (self.lb_export.size() > 0):
-            self.button_batch['state'] = 'normal'
+            self.button_start_batch['state'] = 'normal'
         elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and init.validate_paths() and (self.lb_export.size() > 0):
-            self.button_batch['state'] = 'normal'
+            self.button_start_batch['state'] = 'normal'
         else:
-            self.button_batch['state'] = 'disabled'
+            self.button_start_batch['state'] = 'disabled'
 
 
     def update_table_string(self):
@@ -1265,39 +1276,39 @@ class SXBATCHER_gui(object):
 
 
         # Frame B
-        button_add_catalogue = tk.Button(
+        button_batch_catalogue = tk.Button(
             master=self.frame_b,
             text="Add all from Catalogue",
             width=20,
             height=3,
         )
-        button_add_catalogue.pack(pady=20)
-        button_add_category = tk.Button(
+        button_batch_catalogue.pack(pady=20)
+        button_batch_category = tk.Button(
             master=self.frame_b,
             text="Add all from Category",
             width=20,
             height=3,
         )
-        button_add_category.pack()
-        button_add_selected = tk.Button(
+        button_batch_category.pack()
+        button_batch_selected = tk.Button(
             master=self.frame_b,
             text="Add Selected",
             width=20,
             height=3,
         )
-        button_add_selected.pack(pady=20)
+        button_batch_selected.pack(pady=20)
 
 
         self.var_tag = tk.StringVar(self.window)
         tag_entry = tk.Entry(master=self.frame_b, textvariable=self.var_tag)
         tag_entry.pack()
-        button_add_tagged = tk.Button(
+        button_batch_tagged = tk.Button(
             master=self.frame_b,
             text="Add Tagged",
             width=20,
             height=3,
         )
-        button_add_tagged.pack(pady=10)
+        button_batch_tagged.pack(pady=10)
 
 
         button_clear_exports = tk.Button(
@@ -1335,14 +1346,14 @@ class SXBATCHER_gui(object):
         self.label_export_item_count = tk.Label(master=self.frame_c, text='Items: '+str(self.var_export_count.get()))
         self.label_export_item_count.pack()
 
-        self.button_batch = tk.Button(
+        self.button_start_batch = tk.Button(
             master=self.frame_c,
             text='Start Batch',
             width=20,
             height=3,
         )
-        self.button_batch['state'] = 'disabled'
-        self.button_batch.pack()
+        self.button_start_batch['state'] = 'disabled'
+        self.button_start_batch.pack()
 
         self.frame_a.pack(side='left', fill='both', expand=True)
         self.frame_b.pack(side='left', fill='both', expand=True)
@@ -1351,13 +1362,13 @@ class SXBATCHER_gui(object):
         # Event handling
         self.dropdown.bind('<<ComboboxSelected>>', display_selected)
         self.lb_items.bind('<<ListboxSelect>>', self.handle_click_listboxselect)
-        button_add_catalogue.bind('<Button-1>', self.handle_click_add_catalogue)
-        button_add_category.bind('<Button-1>', self.handle_click_add_category)
-        button_add_selected.bind('<Button-1>', self.handle_click_add_selected)
-        button_add_tagged.bind('<Button-1>', self.handle_click_add_tagged)
+        button_batch_catalogue.bind('<Button-1>', self.handle_click_batch_catalogue)
+        button_batch_category.bind('<Button-1>', self.handle_click_batch_category)
+        button_batch_selected.bind('<Button-1>', self.handle_click_batch_selected)
+        button_batch_tagged.bind('<Button-1>', self.handle_click_batch_tagged)
         button_clear_selection.bind('<Button-1>', self.clear_selection)
         button_clear_exports.bind('<Button-1>', self.clear_lb_export)
-        self.button_batch.bind('<Button-1>', self.handle_click_start_batch)
+        self.button_start_batch.bind('<Button-1>', self.handle_click_start_batch)
 
         # Settings Tab --------------------------------------------------------
         l_title1 = tk.Label(tab2, text='Paths', justify='left', anchor='w')

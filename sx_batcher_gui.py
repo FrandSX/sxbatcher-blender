@@ -695,15 +695,16 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
     def run(self):
         while not self.stop_event.is_set():
-            try:
-                self.payload = json.dumps(init.payload()).encode('utf-8')
-                self.sock.sendto(self.payload, (self.group, self.port))
-                if __debug__:
-                    logging.debug("sent: {}".format(self.payload))
-                time.sleep(3)
+            if sxglobals.share_cpus:
+                try:
+                    self.payload = json.dumps(init.payload()).encode('utf-8')
+                    self.sock.sendto(self.payload, (self.group, self.port))
+                    if __debug__:
+                        logging.debug("sent: {}".format(self.payload))
+                    time.sleep(3)
 
-            except (TimeoutError, OSError):
-                logging.info('SX Batcher: Broadcast timeout, restarting')
+                except (TimeoutError, OSError):
+                    logging.info('SX Batcher: Broadcast timeout, restarting')
         print('bc out of while')
 
 
@@ -730,21 +731,22 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 
     def run(self):
         while not self.stop_event.is_set():
-            try:
-                received, address = self.sock.recvfrom(sxglobals.buffer_size)
-                fields = json.loads(received)
+            if sxglobals.use_network_nodes:
+                try:
+                    received, address = self.sock.recvfrom(sxglobals.buffer_size)
+                    fields = json.loads(received)
 
-                # filter duplicates, maintain existing, update the status of the received node
-                if fields['magic'] == sxglobals.magic:
-                    nodes = []
-                    for node in sxglobals.nodes:
-                        if node[0] != fields['address']:
-                            nodes.append(node)
-                    nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
-                    sxglobals.nodes = nodes
+                    # filter duplicates, maintain existing, update the status of the received node
+                    if fields['magic'] == sxglobals.magic:
+                        nodes = []
+                        for node in sxglobals.nodes:
+                            if node[0] != fields['address']:
+                                nodes.append(node)
+                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
+                        sxglobals.nodes = nodes
 
-            except (TimeoutError, OSError):
-                logging.info('SX Batcher: No nodes found for 10 seconds')
+                except (TimeoutError, OSError):
+                    logging.info('SX Batcher: No nodes found for 10 seconds')
 
         print('dc out of while')
 
@@ -771,66 +773,64 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
     def run(self):
         os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
         while not self.stop_event.is_set():
-            try:
-                print('1')
-                self.sock.listen()
-                print('2')
-                conn, addr = self.sock.accept()
-                print('3')
-                logging.info(f'[+] got connection {addr}')
+            if sxglobals.share_cpus or sxglobals.use_network_nodes:
+                try:
+                    self.sock.listen()
+                    conn, addr = self.sock.accept()
+                    logging.info(f'[+] got connection {addr}')
 
-                # 1 - receive task data
-                b = bytearray()
-                while True:
-                    chunk = conn.recv(self.bufsize)
-                    if not chunk:
-                        break
-                    b.extend(chunk)
-                task_data = json.loads(b.decode('utf-8'))
-                logging.info(f'Node {sxglobals.ip_addr}: Task data received')
-                conn.close()
+                    # 1 - receive task data
+                    b = bytearray()
+                    while True:
+                        chunk = conn.recv(self.bufsize)
+                        if not chunk:
+                            break
+                        b.extend(chunk)
+                    task_data = json.loads(b.decode('utf-8'))
+                    logging.info(f'Node {sxglobals.ip_addr}: Task data received')
+                    conn.close()
 
-                file_meta = task_data.pop(0)
-                transfer_data = [(pathlib.Path(file_and_size[0]).name, int(file_and_size[1])) for file_and_size in file_meta]
+                    file_meta = task_data.pop(0)
+                    transfer_data = [(pathlib.Path(file_and_size[0]).name, int(file_and_size[1])) for file_and_size in file_meta]
 
-                # 2 - receive files
-                conn, addr = self.sock.accept()
-                for i, (file, size) in enumerate(transfer_data):
-                    if task_data[i]['magic'] == sxglobals.magic_task:
-                        target_dir = os.path.realpath('batch_submissions')
-                    else:
-                        target_dir = os.path.join(sxglobals.export_path, task_data[i][file])
-                    os.makedirs(target_dir, exist_ok=True)
+                    # 2 - receive files
+                    conn, addr = self.sock.accept()
+                    for i, (file, size) in enumerate(transfer_data):
+                        if task_data[i]['magic'] == sxglobals.magic_task:
+                            target_dir = os.path.realpath('batch_submissions')
+                        else:
+                            target_dir = os.path.join(sxglobals.export_path, task_data[i][file])
+                        os.makedirs(target_dir, exist_ok=True)
 
-                    with open(os.path.join(target_dir, file), 'wb') as f:
-                        logging.debug(f'[+] writing into {file}...', end='')
-                        left = size
-                        while left:
-                            quot, remain = divmod(left, self.bufsize)
-                            left -= f.write(conn.recv(self.bufsize if quot else remain))
-                            
-                        logging.debug(f' {f.tell()}/{size}')
-                conn.close()
-                logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
+                        with open(os.path.join(target_dir, file), 'wb') as f:
+                            logging.debug(f'[+] writing into {file}...', end='')
+                            left = size
+                            while left:
+                                quot, remain = divmod(left, self.bufsize)
+                                left -= f.write(conn.recv(self.bufsize if quot else remain))
+                                
+                            logging.debug(f' {f.tell()}/{size}')
+                    conn.close()
+                    logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
 
-                # check which nodes have finished their tasks based on connection address
-                if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
-                    sxglobals.tasked_nodes.remove(addr[0])
-                    if len(sxglobals.tasked_nodes) == 0:
-                        sxglobals.now = time.perf_counter()
-                        manager.finish_task()
+                    # check which nodes have finished their tasks based on connection address
+                    if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
+                        sxglobals.tasked_nodes.remove(addr[0])
+                        if len(sxglobals.tasked_nodes) == 0:
+                            sxglobals.now = time.perf_counter()
+                            manager.finish_task()
 
-                if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
-                    sxglobals.master_node = task_data[0]['master']
-                    for task in task_data:
-                        sxglobals.remote_assignment.append(task)
-                        if len(sxglobals.remote_assignment) == int(task['batch_size']):
-                            logging.info('SX Batcher: Processing remotely assigned tasks')
-                            gui.busy_bool.set(True)
+                    if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
+                        sxglobals.master_node = task_data[0]['master']
+                        for task in task_data:
+                            sxglobals.remote_assignment.append(task)
+                            if len(sxglobals.remote_assignment) == int(task['batch_size']):
+                                logging.info('SX Batcher: Processing remotely assigned tasks')
+                                gui.busy_bool.set(True)
 
-            except (OSError, TimeoutError) as error:
-                if str(error) != 'timed out':
-                    logging.error(error)
+                except (OSError, TimeoutError) as error:
+                    if str(error) != 'timed out':
+                        logging.error(error)
 
         print('flc out of while loop')
 
@@ -861,30 +861,8 @@ class SXBATCHER_gui(object):
         self.progress_bar = None
         self.label_progress = None
         self.table_nodes = None
-        self.broadcast_thread = None
-        self.discovery_thread = None
-        self.file_receiving_thread = None
         self.busy_bool = None
         return None
-
-
-    def shutdown_threads(self):
-        print('shutdown threads called')
-        if self.broadcast_thread is not None:
-            if self.broadcast_thread.is_alive():
-                self.broadcast_thread.stop()
-            self.broadcast_thread.join()
-            logging.info('SX Batcher: Broadcast thread disabled')
-        if self.discovery_thread is not None:
-            if self.discovery_thread.is_alive():
-                self.discovery_thread.stop()
-            self.discovery_thread.join()
-            logging.info('SX Batcher: Discovery thread disabled')
-        if self.file_receiving_thread is not None:
-            if self.file_receiving_thread.is_alive():
-                self.file_receiving_thread.stop()
-            self.file_receiving_thread.join()
-            logging.info('SX Batcher: File listener thread disabled')
 
 
     def list_category(self, category, listbox):
@@ -1137,8 +1115,8 @@ class SXBATCHER_gui(object):
                 if disabled is not None:
                     sxglobals.nodes.pop(disabled)
 
-                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
-                gui.toggle_batch_button()
+                # gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
+                # gui.toggle_batch_button()
 
             try:
                 cores = core_count_int.get()
@@ -1154,48 +1132,6 @@ class SXBATCHER_gui(object):
             else:
                 sxglobals.shared_cores = cores
 
-            if self.file_receiving_thread is None:
-                if sxglobals.share_cpus:
-                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-                    self.file_receiving_thread.daemon = True
-                    self.file_receiving_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving started')
-            else:
-                if sxglobals.share_cpus and not self.file_receiving_thread.is_alive():
-                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-                    self.file_receiving_thread.daemon = True
-                    self.file_receiving_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving restarted')
-                elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
-                    self.file_receiving_thread.stop()
-                    self.file_receiving_thread.join()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving stopped')
-
-            if self.broadcast_thread is None:
-                if sxglobals.share_cpus:
-                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
-                    self.broadcast_thread.daemon = True
-                    self.broadcast_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node broadcasting started')
-                else:
-                    pass
-            else:
-                if sxglobals.share_cpus and not self.broadcast_thread.is_alive():
-                    self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
-                    self.broadcast_thread.daemon = True
-                    self.broadcast_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node broadcasting restarted')
-                elif not sxglobals.share_cpus and self.broadcast_thread.is_alive():
-                    self.broadcast_thread.stop()
-                    self.broadcast_thread.join()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node broadcasting stopped')
-
 
         def update_use_nodes(var, index, mode):
             sxglobals.use_network_nodes = use_nodes_bool.get()
@@ -1204,47 +1140,6 @@ class SXBATCHER_gui(object):
                 sxglobals.nodes = []
                 gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
                 gui.toggle_batch_button()
-
-
-            if self.discovery_thread is None:
-                if sxglobals.use_network_nodes:
-                    self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
-                    self.discovery_thread.daemon = True
-                    self.discovery_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node discovery started')
-            else:
-                if sxglobals.use_network_nodes and not self.discovery_thread.is_alive():
-                    self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
-                    self.discovery_thread.daemon = True
-                    self.discovery_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node discovery restarted')
-                elif not sxglobals.use_network_nodes and self.discovery_thread.is_alive():
-                    self.discovery_thread.stop()
-                    self.discovery_thread.join()
-                    if __debug__:
-                        logging.debug('SX Batcher: Node discovery stopped')
-
-            if self.file_receiving_thread is None:
-                if sxglobals.use_network_nodes:
-                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-                    self.file_receiving_thread.daemon = True
-                    self.file_receiving_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving started')
-            else:
-                if sxglobals.use_network_nodes and not self.file_receiving_thread.is_alive():
-                    self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-                    self.file_receiving_thread.daemon = True
-                    self.file_receiving_thread.start()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving restarted')
-                elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
-                    self.file_receiving_thread.stop()
-                    self.file_receiving_thread.join()
-                    if __debug__:
-                        logging.debug('SX Batcher: File receiving stopped')
 
 
         def browse_button_bp():
@@ -1554,7 +1449,7 @@ class SXBATCHER_gui(object):
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
         l_title5.grid(row=4, column=2, padx=10, pady=10)
 
-        self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
+        # self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
 
         self.busy_bool = tk.BooleanVar(self.window)
         self.busy_bool.set(False)
@@ -1562,7 +1457,6 @@ class SXBATCHER_gui(object):
 
         late_loop()
         self.window.mainloop()
-        self.shutdown_threads()
 
 
 # ------------------------------------------------------------------------
@@ -1577,7 +1471,16 @@ manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
-    gui.draw_window()
+    broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
+    broadcast_thread.daemon = True
+    broadcast_thread.start()
 
-# Todo:
-# - Bad file descriptor error related to file_listener
+    discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
+    discovery_thread.daemon = True
+    discovery_thread.start()
+
+    file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+    file_receiving_thread.daemon = True
+    file_receiving_thread.start()
+
+    gui.draw_window()

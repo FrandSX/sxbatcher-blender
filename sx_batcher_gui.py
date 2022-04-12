@@ -677,7 +677,7 @@ class SXBATCHER_batch_local(object):
 #    Responsible for broadcasting availability of CPU resources
 # ------------------------------------------------------------------------
 class SXBATCHER_node_broadcast_thread(threading.Thread):
-    def __init__(self, payload, group, port, timeout=5):
+    def __init__(self, payload, group, port, timeout=15):
         super().__init__()
         self.stop_event = threading.Event()
         self.group = group
@@ -685,6 +685,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
         self.timeout = timeout
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        self.sock.settimeout(timeout)
 
 
     def stop(self):
@@ -694,11 +695,15 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
     def run(self):
         while not self.stop_event.is_set():
-            self.payload = json.dumps(init.payload()).encode('utf-8')
-            self.sock.sendto(self.payload, (self.group, self.port))
-            if __debug__:
-                logging.debug("sent: {}".format(self.payload))
-            time.sleep(self.timeout)
+            try:
+                self.payload = json.dumps(init.payload()).encode('utf-8')
+                self.sock.sendto(self.payload, (self.group, self.port))
+                if __debug__:
+                    logging.debug("sent: {}".format(self.payload))
+                time.sleep(3)
+
+            except (TimeoutError, OSError):
+                logging.info('SX Batcher: Broadcast timeout, restarting')
         print('bc out of while')
 
 
@@ -729,9 +734,10 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                 received, address = self.sock.recvfrom(sxglobals.buffer_size)
                 fields = json.loads(received)
 
+                # filter duplicates, maintain existing, update the status of the received node
                 if fields['magic'] == sxglobals.magic:
                     nodes = []
-                    for i, node in enumerate(sxglobals.nodes):
+                    for node in sxglobals.nodes:
                         if node[0] != fields['address']:
                             nodes.append(node)
                     nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
@@ -754,7 +760,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.bufsize = sxglobals.buffer_size
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
-        self.sock.settimeout(15)
+        self.sock.settimeout(5)
 
 
     def stop(self):
@@ -766,8 +772,11 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
         while not self.stop_event.is_set():
             try:
+                print('1')
                 self.sock.listen()
+                print('2')
                 conn, addr = self.sock.accept()
+                print('3')
                 logging.info(f'[+] got connection {addr}')
 
                 # 1 - receive task data
@@ -1161,6 +1170,7 @@ class SXBATCHER_gui(object):
                         logging.debug('SX Batcher: File receiving restarted')
                 elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
                     self.file_receiving_thread.stop()
+                    self.file_receiving_thread.join()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving stopped')
 
@@ -1182,6 +1192,7 @@ class SXBATCHER_gui(object):
                         logging.debug('SX Batcher: Node broadcasting restarted')
                 elif not sxglobals.share_cpus and self.broadcast_thread.is_alive():
                     self.broadcast_thread.stop()
+                    self.broadcast_thread.join()
                     if __debug__:
                         logging.debug('SX Batcher: Node broadcasting stopped')
 
@@ -1211,6 +1222,7 @@ class SXBATCHER_gui(object):
                         logging.debug('SX Batcher: Node discovery restarted')
                 elif not sxglobals.use_network_nodes and self.discovery_thread.is_alive():
                     self.discovery_thread.stop()
+                    self.discovery_thread.join()
                     if __debug__:
                         logging.debug('SX Batcher: Node discovery stopped')
 
@@ -1230,6 +1242,7 @@ class SXBATCHER_gui(object):
                         logging.debug('SX Batcher: File receiving restarted')
                 elif not sxglobals.share_cpus and self.file_receiving_thread.is_alive() and not sxglobals.use_network_nodes:
                     self.file_receiving_thread.stop()
+                    self.file_receiving_thread.join()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving stopped')
 

@@ -247,6 +247,22 @@ class SXBATCHER_batch_manager(object):
         return None
 
 
+    def shutdown_threads(self):
+        print('shutdown threads called')
+        if gui.broadcast_thread is not None:
+            gui.broadcast_thread.stop()
+            gui.broadcast_thread.join()
+            logging.info('SX Batcher: Broadcast thread disabled')
+        if gui.discovery_thread is not None:
+            gui.discovery_thread.stop()
+            gui.discovery_thread.join()
+            logging.info('SX Batcher: Discovery thread disabled')
+        if gui.file_receiving_thread is not None:
+            gui.file_receiving_thread.stop()
+            gui.file_receiving_thread.join()
+            logging.info('SX Batcher: File listener thread disabled')
+
+
     def get_source_assets(self, revisions_only=False, costs=False):
         current_revisions = init.load_revision_data()
         new_revisions = {}
@@ -693,11 +709,13 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
 
     def run(self):
-        while not self.stop_event.wait(timeout=self.timeout):
+        while not not self.stop_event.is_set():
             self.payload = json.dumps(init.payload()).encode('utf-8')
             self.sock.sendto(self.payload, (self.group, self.port))
             if __debug__:
                 logging.debug("sent: {}".format(self.payload))
+            time.sleep(self.timeout)
+        print('bc out of while')
 
 
 # ------------------------------------------------------------------------
@@ -736,8 +754,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         nodes.append(node)
                 nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                 sxglobals.nodes = nodes
-                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
-                gui.toggle_batch_button()
+        print('dc out of while')
 
 
 # ------------------------------------------------------------------------
@@ -818,6 +835,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
             except (OSError, TimeoutError) as error:
                 if str(error) != 'timed out':
                     logging.error(error)
+
+        print('flc out of while loop')
 
 
 # ------------------------------------------------------------------------
@@ -1123,12 +1142,14 @@ class SXBATCHER_gui(object):
             if self.file_receiving_thread is None:
                 if sxglobals.share_cpus:
                     self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.daemon = True
                     self.file_receiving_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving started')
             else:
                 if sxglobals.share_cpus and not self.file_receiving_thread.is_alive():
                     self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.daemon = True
                     self.file_receiving_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving restarted')
@@ -1140,6 +1161,7 @@ class SXBATCHER_gui(object):
             if self.broadcast_thread is None:
                 if sxglobals.share_cpus:
                     self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
+                    self.broadcast_thread.daemon = True
                     self.broadcast_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: Node broadcasting started')
@@ -1148,6 +1170,7 @@ class SXBATCHER_gui(object):
             else:
                 if sxglobals.share_cpus and not self.broadcast_thread.is_alive():
                     self.broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
+                    self.broadcast_thread.daemon = True
                     self.broadcast_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: Node broadcasting restarted')
@@ -1169,12 +1192,14 @@ class SXBATCHER_gui(object):
             if self.discovery_thread is None:
                 if sxglobals.use_network_nodes:
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
+                    self.discovery_thread.daemon = True
                     self.discovery_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: Node discovery started')
             else:
                 if sxglobals.use_network_nodes and not self.discovery_thread.is_alive():
                     self.discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
+                    self.discovery_thread.daemon = True
                     self.discovery_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: Node discovery restarted')
@@ -1186,12 +1211,14 @@ class SXBATCHER_gui(object):
             if self.file_receiving_thread is None:
                 if sxglobals.use_network_nodes:
                     self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.daemon = True
                     self.file_receiving_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving started')
             else:
                 if sxglobals.use_network_nodes and not self.file_receiving_thread.is_alive():
                     self.file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+                    self.file_receiving_thread.daemon = True
                     self.file_receiving_thread.start()
                     if __debug__:
                         logging.debug('SX Batcher: File receiving restarted')
@@ -1218,6 +1245,17 @@ class SXBATCHER_gui(object):
         def browse_button_ep():
             e4_str.set(filedialog.askdirectory())
             init.validate_paths()
+
+
+        def refresh_node_grid():
+            self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
+            self.toggle_batch_button()
+            late_loop()
+
+
+        def late_loop():
+            self.window.after(1000, refresh_node_grid)
+            # refresh_node_grid()
 
 
         self.window = tk.Tk()
@@ -1502,7 +1540,10 @@ class SXBATCHER_gui(object):
         self.busy_bool.set(False)
         self.busy_bool.trace_add('write', update_remote_process)
 
+        late_loop()
         self.window.mainloop()
+
+        print('after window mainloop')
 
 
 # ------------------------------------------------------------------------
@@ -1518,13 +1559,7 @@ batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
     gui.draw_window()
-
-    if gui.broadcast_thread is not None:
-        gui.broadcast_thread.stop()
-    if gui.discovery_thread is not None:
-        gui.discovery_thread.stop()
-    if gui.file_receiving_thread is not None:
-        gui.file_receiving_thread.stop()
+    manager.shutdown_threads()
 
 # Todo:
 # - Bad file descriptor error related to file_listener

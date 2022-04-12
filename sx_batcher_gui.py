@@ -203,6 +203,18 @@ class SXBATCHER_init(object):
             return {'empty': {'empty': {'objects': ['empty', ], 'tags': ['empty', ]}}}
 
 
+    # revision data is expected to be located at the root of the export folder
+    def load_revision_data(self):
+        revision_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
+        if os.path.isfile(revision_path):
+            return self.load_json(revision_path)
+        else:
+            logging.error(f'Node {sxglobals.ip_addr} Error: file_revisions.json not found. A new one is created.')
+            revision_dict = manager.get_revisions(all=True)
+            self.save_json(revision_path, revision_dict)
+            return revision_dict
+
+
     # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, out_files):
         payload = out_files[0]
@@ -236,8 +248,7 @@ class SXBATCHER_batch_manager(object):
 
 
     def get_source_assets(self, revisions_only=False, costs=False):
-        revision_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
-        current_revisions = init.load_json(revision_path)
+        current_revisions = init.load_revision_data()
         new_revisions = {}
 
         # Also update catalogue in case of new revisions
@@ -287,12 +298,14 @@ class SXBATCHER_batch_manager(object):
             return source_files
 
 
-    def get_source_revisions(self):
+    def get_revisions(self, all=False):
         source_assets = []
-        for obj in sxglobals.export_objs:
-            for category in sxglobals.catalogue:
-                for filepath, obj_dict in sxglobals.catalogue[category].items():
-                    if obj in obj_dict['objects']:
+        for category in sxglobals.catalogue:
+            for filepath, obj_dict in sxglobals.catalogue[category].items():
+                if all:
+                    source_assets.append((filepath, obj_dict.get('revision', str(0))))
+                else:
+                    if any(item in sxglobals.export_objs for item in obj_dict['objects']):
                         source_assets.append((filepath, obj_dict.get('revision', str(0))))
 
         source_assets = list(set(source_assets))
@@ -303,11 +316,11 @@ class SXBATCHER_batch_manager(object):
 
 
     def update_revisions(self):
-        file_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
-        file_dict = init.load_json(file_path)
-        data_dict = self.get_source_revisions()
+        revision_path = sxglobals.export_path + os.path.sep + 'file_revisions.json'
+        file_dict = init.load_revision_data()
+        data_dict = self.get_revisions()
         file_dict.update(data_dict)
-        init.save_json(file_path, file_dict)
+        init.save_json(revision_path, file_dict)
 
 
     def delete_submissions(self):
@@ -1504,4 +1517,3 @@ if __name__ == '__main__':
 
 # Todo:
 # - Bad file descriptor error related to file_listener
-# - Gracefully handle missing file_revisions.json

@@ -1,6 +1,4 @@
 import logging
-from sqlite3 import Time
-import sys
 import threading
 import subprocess
 import multiprocessing

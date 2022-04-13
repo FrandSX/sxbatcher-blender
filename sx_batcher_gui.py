@@ -705,6 +705,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
                 except (TimeoutError, OSError):
                     logging.info('SX Batcher: Broadcast timeout, restarting')
+            time.sleep(0.01)
         print('bc out of while')
 
 
@@ -747,6 +748,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 
                 except (TimeoutError, OSError):
                     logging.info('SX Batcher: No nodes found for 10 seconds')
+            time.sleep(0.01)
 
         print('dc out of while')
 
@@ -831,6 +833,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 except (OSError, TimeoutError) as error:
                     if str(error) != 'timed out':
                         logging.error(error)
+            time.sleep(0.01)
 
         print('flc out of while loop')
 

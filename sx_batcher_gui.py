@@ -26,17 +26,17 @@ class SXBATCHER_globals(object):
         self.export_path = conf.get('export_path', '')
         self.sxtools_path = conf.get('sxtools_path', '')
 
+        # Distributed processing settings
         self.share_cpus = bool(int(conf.get('share_cpus', False)))
         self.shared_cores = int(conf.get('shared_cores', 0))
         self.use_network_nodes = bool(int(conf.get('use_nodes', False)))
         self.ip_addr = init.get_ip()
 
-        self.catalogue = None
-        self.active_category = None
         self.then = None
         self.now = None
 
-        self.update_repo = False  # call all nodes to update their plastic repos
+        # Remote call to update Plastic repo
+        self.update_repo = False
 
         # Batch lists
         self.export_objs = None
@@ -64,7 +64,7 @@ class SXBATCHER_globals(object):
         self.magic_result = 'ankdf89d'
         self.master_node = None
         self.buffer_size = 4096
-        self.nodes = []
+        self.nodes = conf.get('nodes', [])
         self.tasked_nodes = []
         self.node_busy_status = False
 
@@ -172,7 +172,8 @@ class SXBATCHER_init(object):
             'revision_export': str(int(sxglobals.revision_export)),
             'share_cpus': str(int(sxglobals.share_cpus)),
             'shared_cores': str(int(sxglobals.shared_cores)),
-            'use_nodes': str(int(sxglobals.use_network_nodes))
+            'use_nodes': str(int(sxglobals.use_network_nodes)),
+            'nodes': sxglobals.nodes
         }
 
         self.save_json(conf_path, temp_dict)

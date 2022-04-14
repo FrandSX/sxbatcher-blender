@@ -341,7 +341,8 @@ class SXBATCHER_batch_manager(object):
         if reset:
             label_string = 'No Changes!'
         else:
-            self.update_revisions()
+            if sxglobals.master_node is None:
+                self.update_revisions()
 
             if len(sxglobals.errors) > 0:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds\n'

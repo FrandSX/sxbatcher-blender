@@ -364,12 +364,9 @@ class SXBATCHER_batch_manager(object):
     # 2) Distributed batch processing assigned via GUI
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
-        sxglobals.export_objs = []
         sxglobals.node_busy_status = True
         gui.label_progress.configure(text='Job Running')
         sxglobals.then = time.perf_counter()
-        for i in range(gui.lb_export.size()):
-            sxglobals.export_objs.append(gui.lb_export.get(i))
 
         if remote_task:
             # Receive files to be processed from network node
@@ -938,6 +935,10 @@ class SXBATCHER_gui(object):
     def handle_click_start_batch(self, event):
         if (self.button_start_batch['state'] == 'normal') or (self.button_start_batch['state'] == 'active'):
             self.button_start_batch['state'] = 'disabled'
+
+            sxglobals.export_objs = []
+            for i in range(self.lb_export.size()):
+                sxglobals.export_objs.append(self.lb_export.get(i))
 
             manager.task_handler()
 

@@ -359,7 +359,7 @@ class SXBATCHER_batch_manager(object):
                 remote_tasks = self.prepare_received_tasks()
                 t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
                 t.start()
-                gui.step_check(t)
+                gui.check_progress(t)
             else:
                 self.finish_task(reset=True)
         else:
@@ -400,7 +400,7 @@ class SXBATCHER_batch_manager(object):
                 if len(local_tasks) > 0:
                     t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
                     t.start()
-                    gui.step_check(t)
+                    gui.check_progress(t)
                 else:
                     self.finish_task(reset=True)
 
@@ -932,15 +932,11 @@ class SXBATCHER_gui(object):
         init.save_conf()
 
 
-    def step_check(self, t):
-        self.window.after(1000, self.check_progress, t)
-
-
     def check_progress(self, t):
         if not t.is_alive():
             manager.finish_task()
         else:
-            self.step_check(t)
+            self.window.after(1000, self.check_progress, t)
 
 
     def refresh_lb_items(self):
@@ -1008,6 +1004,11 @@ class SXBATCHER_gui(object):
                 self.e = tk.Entry(root)
                 self.e.grid(row=i+startrow, column=j+startcolumn)
                 self.e.insert('end', data[i][j])
+
+
+    def refresh_node_grid(self):
+        self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
+        self.toggle_batch_button()
 
 
     def draw_window(self):
@@ -1097,9 +1098,6 @@ class SXBATCHER_gui(object):
                 if disabled is not None:
                     sxglobals.nodes.pop(disabled)
 
-                # gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
-                # gui.toggle_batch_button()
-
             try:
                 cores = core_count_int.get()
             except Exception:
@@ -1120,8 +1118,7 @@ class SXBATCHER_gui(object):
 
             if not sxglobals.use_network_nodes:
                 sxglobals.nodes = []
-                self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
-                self.toggle_batch_button()
+                self.refresh_node_grid()
 
 
         def browse_button_bp():
@@ -1143,16 +1140,12 @@ class SXBATCHER_gui(object):
             sxglobals.validate_paths()
 
 
-        def refresh_node_grid():
-            if sxglobals.use_network_nodes:
-                self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
-                self.toggle_batch_button()
-            late_loop()
-
         # place your timer-run refresh elements here
         def late_loop():
-            self.window.after(1000, refresh_node_grid)
             # refresh_node_grid()
+            if sxglobals.use_network_nodes:
+                self.refresh_node_grid()
+            self.window.after(1000, late_loop)
 
 
         self.window = tk.Tk()
@@ -1430,8 +1423,6 @@ class SXBATCHER_gui(object):
 
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
         l_title5.grid(row=4, column=2, padx=10, pady=10)
-
-        # self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
 
         self.busy_bool = tk.BooleanVar(self.window)
         self.busy_bool.set(False)

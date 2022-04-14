@@ -352,7 +352,7 @@ class SXBATCHER_batch_manager(object):
             else:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
 
-        gui.state_manager('idle', label=label_string)
+        gui.state_manager('ready', label=label_string)
         sxglobals.errors = []
         sxglobals.node_busy_status = False
         sxglobals.master_node = None
@@ -888,7 +888,10 @@ class SXBATCHER_gui(object):
         elif state == 'not_ready':
             self.button_start_batch['state'] = 'disabled'
             if label is None:
-                label = 'Idle'
+                if sxglobals.use_network_nodes:
+                    label = 'Waiting for Tasks or Nodes'
+                else:
+                    label = 'Waiting for Tasks'
 
         self.label_progress.configure(text=label)
 
@@ -994,7 +997,7 @@ class SXBATCHER_gui(object):
     def clear_lb_export(self, event):
         self.lb_export.delete(0, 'end')
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.state_manager('idle')
+        self.state_manager('not_ready')
 
 
     def update_table_string(self):
@@ -1037,7 +1040,8 @@ class SXBATCHER_gui(object):
 
     def refresh_node_grid(self):
         self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
-        self.state_manager()
+        if len(sxglobals.nodes) == 0:
+            self.state_manager('not_ready')
 
 
     def draw_window(self):

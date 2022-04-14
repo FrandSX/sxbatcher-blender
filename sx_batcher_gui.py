@@ -849,28 +849,47 @@ class SXBATCHER_gui(object):
         return None
 
 
-    def state_manager(self, state, label):
-        self.label_progress.configure(text=label)
+    def state_manager(self, state=None, label=None):
+        if state is None:
+            if not sxglobals.use_network_nodes and sxglobals.validate_paths() and (self.lb_export.size() > 0):
+                state = 'ready'
+            elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and sxglobals.validate_paths() and (self.lb_export.size() > 0):
+                state = 'ready'
+            else:
+                state = 'not_ready'
 
-        if state == 'idle':
+        if state == 'ready':
             self.button_start_batch['state'] = 'normal'
             self.progress_bar['value'] = 0
             self.remote_task_bool.set(False)
+            if label is None:
+                label = 'Ready to Process'
 
         elif state == 'remote':
             self.button_start_batch['state'] = 'disabled'
             self.progress_bar['value'] = 0
+            if label is None:
+                self.label_progress.configure(text='Processing Remote Batch')
             manager.task_handler(remote_task=True)
 
         elif state == 'busy':
             self.button_start_batch['state'] = 'disabled'
             self.progress_bar['value'] = 0
+            if label is None:
+                self.label_progress.configure(text='Processing Batch')
 
             sxglobals.export_objs = []
             for i in range(self.lb_export.size()):
                 sxglobals.export_objs.append(self.lb_export.get(i))
 
             manager.task_handler()
+
+        elif state == 'not_ready':
+            self.button_start_batch['state'] = 'disabled'
+            if label is None:
+                label = 'Idle'
+
+        self.label_progress.configure(text=label)
 
 
     def list_objs(self, obj_list, listbox):
@@ -883,13 +902,13 @@ class SXBATCHER_gui(object):
         self.lb_export.delete(0, 'end')
         self.lb_export = self.list_objs(manager.get_catalogue_objs(), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.toggle_batch_button()
+        self.state_manager()
 
 
     def handle_click_batch_category(self, event):
         self.lb_export = self.list_objs(manager.get_category_objs(sxglobals.active_category), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.toggle_batch_button()
+        self.state_manager()
 
 
     def handle_click_batch_selected(self, event):
@@ -897,14 +916,14 @@ class SXBATCHER_gui(object):
         for value in selected_item_list:
             self.lb_export.insert('end', value)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.toggle_batch_button()
+        self.state_manager()
 
 
     def handle_click_batch_tagged(self, event):
         tag = self.var_tag.get()
         self.lb_export = self.list_objs(manager.get_tagged_objs([tag, ]), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.toggle_batch_button()
+        self.state_manager()
 
 
     def handle_click_update_plastic(self, event):
@@ -935,12 +954,16 @@ class SXBATCHER_gui(object):
             if (j % 5 == 0):
                 tag_string += '\n'
         tag_string += '\n'
-        self.label_found_tags.configure(text='Tags in Selected:\n\n'+tag_string)
+
+        prefix = ''
+        if len(tag_string) > 0:
+            prefix = 'Tags in Selected:\n'
+        self.label_found_tags.configure(text=prefix+tag_string)
 
 
     def handle_click_start_batch(self, event):
         if (self.button_start_batch['state'] == 'normal') or (self.button_start_batch['state'] == 'active'):
-            self.state_manager('busy', label='Processing Batch')
+            self.state_manager('busy')
 
 
     def handle_click_save_settings(self, event):
@@ -964,23 +987,13 @@ class SXBATCHER_gui(object):
 
     def clear_selection(self, event):
         self.lb_items.selection_clear(0, 'end')
-        self.label_found_tags.configure(text='Tags in Selected:')
+        self.label_found_tags.configure(text='')
 
 
     def clear_lb_export(self, event):
-        self.label_progress.configure(text='Idle')
         self.lb_export.delete(0, 'end')
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
-        self.toggle_batch_button()
-
-
-    def toggle_batch_button(self):
-        if not sxglobals.use_network_nodes and sxglobals.validate_paths() and (self.lb_export.size() > 0):
-            self.button_start_batch['state'] = 'normal'
-        elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and sxglobals.validate_paths() and (self.lb_export.size() > 0):
-            self.button_start_batch['state'] = 'normal'
-        else:
-            self.button_start_batch['state'] = 'disabled'
+        self.state_manager('idle')
 
 
     def update_table_string(self):
@@ -1023,13 +1036,13 @@ class SXBATCHER_gui(object):
 
     def refresh_node_grid(self):
         self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
-        self.toggle_batch_button()
+        self.state_manager()
 
 
     def draw_window(self):
         def update_remote_process(var, index, mode):
              if self.remote_task_bool.get():
-                self.state_manager('remote', label='Processing Remote Batch')
+                self.state_manager('remote')
 
 
         def display_selected(choice):
@@ -1049,23 +1062,23 @@ class SXBATCHER_gui(object):
 
         def update_blender_path(var, index, mode):
             sxglobals.blender_path = e1_str.get()
-            self.toggle_batch_button()
+            self.state_manager()
 
 
         def update_sxtools_path(var, index, mode):
             sxglobals.sxtools_path = e2_str.get()
-            self.toggle_batch_button()
+            self.state_manager()
 
 
         def update_catalogue_path(var, index, mode):
             sxglobals.catalogue_path = e3_str.get()
             refresh_catalogue_view()
-            self.toggle_batch_button()
+            self.state_manager()
 
 
         def update_export_path(var, index, mode):
             sxglobals.export_path = e4_str.get()
-            self.toggle_batch_button()
+            self.state_manager()
 
 
         def update_palette_override(var, index, mode):
@@ -1157,7 +1170,6 @@ class SXBATCHER_gui(object):
 
         # place your timer-run refresh elements here
         def late_loop():
-            # refresh_node_grid()
             if sxglobals.use_network_nodes:
                 self.refresh_node_grid()
             self.window.after(1000, late_loop)
@@ -1262,7 +1274,7 @@ class SXBATCHER_gui(object):
         )
         button_clear_exports.pack(pady=30)
 
-        self.label_found_tags = tk.Label(master=self.frame_b, text='Tags in Selected:')
+        self.label_found_tags = tk.Label(master=self.frame_b, text='')
         self.label_found_tags.pack()
 
         self.label_progress = tk.Label(master=self.frame_b, text='Idle')

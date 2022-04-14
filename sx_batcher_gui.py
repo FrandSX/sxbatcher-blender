@@ -19,17 +19,19 @@ from tkinter import filedialog
 # ------------------------------------------------------------------------
 class SXBATCHER_globals(object):
     def __init__(self):
-        # Main locations, validate if changed
-        self.blender_path = ''
-        self.catalogue_path = ''
-        self.export_path = ''
-        self.sxtools_path = ''
-        self.asset_path = ''
+        conf = init.load_conf()
 
-        self.share_cpus = None
-        self.shared_cores = None
-        self.use_network_nodes = None
-        self.ip_addr = None
+        # Main locations, validate if changed
+        self.blender_path = conf.get('blender_path', '')
+        self.catalogue_path = conf.get('catalogue_path', '')
+        self.export_path = conf.get('export_path', '')
+        self.sxtools_path = conf.get('sxtools_path', '')
+
+        self.share_cpus = bool(int(conf.get('share_cpus', False)))
+        self.shared_cores = int(conf.get('shared_cores', 0))
+        self.use_network_nodes = bool(int(conf.get('use_nodes', False)))
+        self.ip_addr = init.get_ip()
+
         self.catalogue = None
         self.active_category = None
         self.then = None
@@ -46,13 +48,13 @@ class SXBATCHER_globals(object):
         self.revision_dict = {}
 
         # Blender setting overrides
-        self.debug = False
-        self.palette = False
-        self.palette_name = None
-        self.subdivision = False
-        self.subdivision_count = None
-        self.static_vertex_colors = False
-        self.revision_export = False
+        self.debug = bool(int(conf.get('debug', False)))
+        self.palette = bool(int(conf.get('palette', False)))
+        self.palette_name = conf.get('palette_name', '')
+        self.subdivision = bool(int(conf.get('subdivision', False)))
+        self.subdivision_count = int(conf.get('subdivision_count', 0))
+        self.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+        self.revision_export = bool(int(conf.get('revision_export', False)))
 
         # Network settings
         self.group = '239.1.1.1'
@@ -67,7 +69,30 @@ class SXBATCHER_globals(object):
         self.tasked_nodes = []
         self.node_busy_status = False
 
+        self.validate_paths()
+
+        if self.catalogue_path != '':
+            self.asset_path = os.path.split(self.catalogue_path)[0].replace('//', os.path.sep)
+            self.catalogue = init.load_asset_data(self.catalogue_path)
+        else:
+            self.asset_path = ''
+            self.catalogue = {'empty': {'empty': {'objects': ['empty', ], 'tags': ['empty', ]}}}
+
+        self.active_category = list(self.catalogue.keys())[0]
+
         return None
+
+    def validate_paths(self):
+        if self.blender_path != '':
+            self.blender_path = self.blender_path.replace('//', os.path.sep) if os.path.isfile(self.blender_path.replace('//', os.path.sep)) else ''
+        if self.catalogue_path != '':
+            self.catalogue_path = self.catalogue_path.replace('//', os.path.sep) if os.path.isfile(self.catalogue_path.replace('//', os.path.sep)) else ''
+        if self.export_path != '':
+            self.export_path = self.export_path.replace('//', os.path.sep) if os.path.isdir(self.export_path.replace('//', os.path.sep)) else ''
+        if self.sxtools_path != '':
+            self.sxtools_path = self.sxtools_path.replace('//', os.path.sep) if os.path.isdir(self.sxtools_path.replace('//', os.path.sep)) else ''
+
+        return (self.blender_path != '') and (self.catalogue_path != '') and (self.export_path != '') and (self.sxtools_path != '')
 
 
 # ------------------------------------------------------------------------
@@ -75,32 +100,6 @@ class SXBATCHER_globals(object):
 # ------------------------------------------------------------------------
 class SXBATCHER_init(object):
     def __init__(self):
-        conf = self.load_conf()
-        sxglobals.blender_path = conf.get('blender_path', '')
-        sxglobals.catalogue_path = conf.get('catalogue_path', '')
-        sxglobals.export_path = conf.get('export_path', '')
-        sxglobals.sxtools_path = conf.get('sxtools_path', '')
-        sxglobals.debug = bool(int(conf.get('debug', False)))
-        sxglobals.palette = bool(int(conf.get('palette', False)))
-        sxglobals.palette_name = conf.get('palette_name', '')
-        sxglobals.subdivision = bool(int(conf.get('subdivision', False)))
-        sxglobals.subdivision_count = int(conf.get('subdivision_count', 0))
-        sxglobals.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
-        sxglobals.revision_export = bool(int(conf.get('revision_export', False)))
-        sxglobals.share_cpus = bool(int(conf.get('share_cpus', False)))
-        sxglobals.shared_cores = int(conf.get('shared_cores', 0))
-        sxglobals.use_network_nodes = bool(int(conf.get('use_nodes', False)))
-        sxglobals.ip_addr = self.get_ip()
-        self.validate_paths()
-
-        if sxglobals.catalogue_path != '':
-            sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
-            sxglobals.catalogue = self.load_asset_data(sxglobals.catalogue_path)
-        else:
-            sxglobals.catalogue = {'empty': {'empty': {'objects': ['empty', ], 'tags': ['empty', ]}}}
-
-        sxglobals.active_category = list(sxglobals.catalogue.keys())[0]
-
         return None
 
 
@@ -178,19 +177,6 @@ class SXBATCHER_init(object):
 
         self.save_json(conf_path, temp_dict)
         logging.info(f'SX Batcher: {conf_path} saved')
-
-
-    def validate_paths(self):
-        if sxglobals.blender_path != '':
-            sxglobals.blender_path = sxglobals.blender_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.blender_path.replace('//', os.path.sep)) else ''
-        if sxglobals.catalogue_path != '':
-            sxglobals.catalogue_path = sxglobals.catalogue_path.replace('//', os.path.sep) if os.path.isfile(sxglobals.catalogue_path.replace('//', os.path.sep)) else ''
-        if sxglobals.export_path != '':
-            sxglobals.export_path = sxglobals.export_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.export_path.replace('//', os.path.sep)) else ''
-        if sxglobals.sxtools_path != '':
-            sxglobals.sxtools_path = sxglobals.sxtools_path.replace('//', os.path.sep) if os.path.isdir(sxglobals.sxtools_path.replace('//', os.path.sep)) else ''
-
-        return (sxglobals.blender_path != '') and (sxglobals.catalogue_path != '') and (sxglobals.export_path != '') and (sxglobals.sxtools_path != '')
 
 
     def load_asset_data(self, catalogue_path):
@@ -979,9 +965,9 @@ class SXBATCHER_gui(object):
 
 
     def toggle_batch_button(self):
-        if not sxglobals.use_network_nodes and init.validate_paths() and (self.lb_export.size() > 0):
+        if not sxglobals.use_network_nodes and sxglobals.validate_paths() and (self.lb_export.size() > 0):
             self.button_start_batch['state'] = 'normal'
-        elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and init.validate_paths() and (self.lb_export.size() > 0):
+        elif sxglobals.use_network_nodes and len(sxglobals.nodes) > 0 and sxglobals.validate_paths() and (self.lb_export.size() > 0):
             self.button_start_batch['state'] = 'normal'
         else:
             self.button_start_batch['state'] = 'disabled'
@@ -1135,27 +1121,27 @@ class SXBATCHER_gui(object):
 
             if not sxglobals.use_network_nodes:
                 sxglobals.nodes = []
-                gui.table_grid(gui.tab3, gui.update_node_grid_data(), 5, 2)
-                gui.toggle_batch_button()
+                self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
+                self.toggle_batch_button()
 
 
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
-            init.validate_paths()
+            sxglobals.validate_paths()
 
         def browse_button_sp():
             e2_str.set(filedialog.askdirectory())
-            init.validate_paths()
+            sxglobals.validate_paths()
 
 
         def browse_button_cp():
             e3_str.set(filedialog.askopenfilename())
-            init.validate_paths()
+            sxglobals.validate_paths()
 
 
         def browse_button_ep():
             e4_str.set(filedialog.askdirectory())
-            init.validate_paths()
+            sxglobals.validate_paths()
 
 
         def refresh_node_grid():
@@ -1164,7 +1150,7 @@ class SXBATCHER_gui(object):
                 self.toggle_batch_button()
             late_loop()
 
-
+        # place your timer-run refresh elements here
         def late_loop():
             self.window.after(1000, refresh_node_grid)
             # refresh_node_grid()
@@ -1461,8 +1447,8 @@ class SXBATCHER_gui(object):
 #          of your asset folder structure.
 # ------------------------------------------------------------------------
 
-sxglobals = SXBATCHER_globals()
 init = SXBATCHER_init()
+sxglobals = SXBATCHER_globals()
 gui = SXBATCHER_gui()
 manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()

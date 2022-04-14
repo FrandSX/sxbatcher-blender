@@ -231,6 +231,31 @@ class SXBATCHER_batch_manager(object):
         return None
 
 
+    def get_catalogue_objs(self):
+        obj_list = []
+        for category in sxglobals.catalogue:
+            obj_list.extend(self.get_category_objs(category))
+        return obj_list
+
+
+    def get_category_objs(self, category):
+        obj_list = []
+        category = sxglobals.catalogue[category]
+        for obj_dict in category.values():
+            for obj_name in obj_dict['objects']:
+                obj_list.append(obj_name)
+        return obj_list
+
+
+    def get_tagged_objs(self, tags):
+        obj_list = []
+        for category in sxglobals.catalogue:
+            for obj_dict in sxglobals.catalogue[category].values():
+                if any(tag in tags for tag in obj_dict['tags']):
+                    obj_list.extend(obj_dict['objects'])
+        return obj_list
+
+
     def get_source_assets(self, revisions_only=False, costs=False):
         current_revisions = init.load_revision_data()
         new_revisions = {}
@@ -247,11 +272,7 @@ class SXBATCHER_batch_manager(object):
                     if obj in obj_dict['objects']:
                         if revisions_only:
                             revision = obj_dict.get('revision', str(0))
-                            if (asset not in current_revisions.keys()):
-                                new_revisions[asset] = revision
-                                source_assets.append((asset, int(obj_dict['cost'])))
-                                changed_assets.append(asset)
-                            elif (asset in current_revisions.keys()) and (int(current_revisions[asset]) < int(revision)):
+                            if int(current_revisions.get(asset, '-1')) < int(revision):
                                 new_revisions[asset] = revision
                                 source_assets.append((asset, int(obj_dict['cost'])))
                                 changed_assets.append(asset)
@@ -852,25 +873,21 @@ class SXBATCHER_gui(object):
             manager.task_handler()
 
 
-    def list_category(self, category, listbox):
-        lb = listbox
-        category = sxglobals.catalogue[category]
-        for obj_dict in category.values():
-            for obj_name in obj_dict['objects']:
-                lb.insert('end', obj_name)
-        return lb
+    def list_objs(self, obj_list, listbox):
+        for obj_name in obj_list:
+            listbox.insert('end', obj_name)
+        return listbox
 
 
     def handle_click_batch_catalogue(self, event):
         self.lb_export.delete(0, 'end')
-        for category in sxglobals.catalogue:
-            self.lb_export = self.list_category(category, self.lb_export)
+        self.lb_export = self.list_objs(manager.get_catalogue_objs(), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
 
 
     def handle_click_batch_category(self, event):
-        self.lb_export = self.list_category(sxglobals.active_category, self.lb_export)
+        self.lb_export = self.list_objs(manager.get_category_objs(sxglobals.active_category), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
 
@@ -885,12 +902,7 @@ class SXBATCHER_gui(object):
 
     def handle_click_batch_tagged(self, event):
         tag = self.var_tag.get()
-        for category in sxglobals.catalogue:
-            for obj_dict in sxglobals.catalogue[category].values():
-                if tag in obj_dict['tags']:
-                    for obj_name in obj_dict['objects']:
-                        self.lb_export.insert('end', obj_name)
-
+        self.lb_export = self.list_objs(manager.get_tagged_objs([tag, ]), self.lb_export)
         self.label_export_item_count.configure(text='Items: '+str(self.lb_export.size()))
         self.toggle_batch_button()
 
@@ -947,7 +959,7 @@ class SXBATCHER_gui(object):
             self.lb_items.delete(0, 'end')
         else:
             self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
-        self.lb_items = self.list_category(sxglobals.active_category, self.lb_items)
+        self.lb_items = self.list_objs(manager.get_category_objs(sxglobals.active_category), self.lb_items)
 
 
     def clear_selection(self, event):

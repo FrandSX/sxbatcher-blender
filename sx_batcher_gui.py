@@ -329,14 +329,11 @@ class SXBATCHER_batch_manager(object):
             else:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
 
-        gui.label_progress.configure(text=label_string)
-        gui.button_start_batch['state'] = 'normal'
-        gui.progress_bar['value'] = 0
+        gui.state_manager('idle', label=label_string)
         sxglobals.errors = []
         sxglobals.node_busy_status = False
         sxglobals.master_node = None
         sxglobals.remote_assignment = []
-        gui.busy_bool.set(False)
 
         if sxglobals.share_cpus:
             self.delete_submissions()
@@ -348,7 +345,6 @@ class SXBATCHER_batch_manager(object):
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
         sxglobals.node_busy_status = True
-        gui.label_progress.configure(text='Job Running')
         sxglobals.then = time.perf_counter()
 
         if remote_task:
@@ -793,7 +789,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             sxglobals.remote_assignment.append(task)
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
                                 logging.info('Processing remotely assigned tasks')
-                                gui.busy_bool.set(True)
+                                gui.remote_task_bool.set(True)
 
                 except (OSError, TimeoutError) as error:
                     if str(error) != 'timed out':
@@ -827,8 +823,32 @@ class SXBATCHER_gui(object):
         self.progress_bar = None
         self.label_progress = None
         self.table_nodes = None
-        self.busy_bool = None
+        self.remote_task_bool = None
         return None
+
+
+    def state_manager(self, state, label):
+        self.label_progress.configure(text=label)
+
+        if state == 'idle':
+            self.button_start_batch['state'] = 'normal'
+            self.progress_bar['value'] = 0
+            self.remote_task_bool.set(False)
+
+        elif state == 'remote':
+            self.button_start_batch['state'] = 'disabled'
+            self.progress_bar['value'] = 0
+            manager.task_handler(remote_task=True)
+
+        elif state == 'busy':
+            self.button_start_batch['state'] = 'disabled'
+            self.progress_bar['value'] = 0
+
+            sxglobals.export_objs = []
+            for i in range(self.lb_export.size()):
+                sxglobals.export_objs.append(self.lb_export.get(i))
+
+            manager.task_handler()
 
 
     def list_category(self, category, listbox):
@@ -907,13 +927,7 @@ class SXBATCHER_gui(object):
 
     def handle_click_start_batch(self, event):
         if (self.button_start_batch['state'] == 'normal') or (self.button_start_batch['state'] == 'active'):
-            self.button_start_batch['state'] = 'disabled'
-
-            sxglobals.export_objs = []
-            for i in range(self.lb_export.size()):
-                sxglobals.export_objs.append(self.lb_export.get(i))
-
-            manager.task_handler()
+            self.state_manager('busy', label='Processing Batch')
 
 
     def handle_click_save_settings(self, event):
@@ -1001,8 +1015,8 @@ class SXBATCHER_gui(object):
 
     def draw_window(self):
         def update_remote_process(var, index, mode):
-             if self.busy_bool.get():
-                manager.task_handler(remote_task=True)
+             if self.remote_task_bool.get():
+                self.state_manager('remote', label='Processing Remote Batch')
 
 
         def display_selected(choice):
@@ -1412,9 +1426,9 @@ class SXBATCHER_gui(object):
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
         l_title5.grid(row=4, column=2, padx=10, pady=10)
 
-        self.busy_bool = tk.BooleanVar(self.window)
-        self.busy_bool.set(False)
-        self.busy_bool.trace_add('write', update_remote_process)
+        self.remote_task_bool = tk.BooleanVar(self.window)
+        self.remote_task_bool.set(False)
+        self.remote_task_bool.trace_add('write', update_remote_process)
 
         late_loop()
         self.window.mainloop()

@@ -10,8 +10,7 @@ import struct
 import os
 import platform
 import tkinter as tk
-from tkinter import MULTIPLE, ttk
-from tkinter import filedialog
+from tkinter import ttk, filedialog
 
 
 # ------------------------------------------------------------------------

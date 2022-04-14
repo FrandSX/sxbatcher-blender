@@ -158,24 +158,25 @@ class SXBATCHER_init(object):
 
     def save_conf(self):
         conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
-        temp_dict = {}
-        temp_dict['blender_path'] = sxglobals.blender_path.replace(os.path.sep, '//') if sxglobals.blender_path != '' else ''
-        temp_dict['catalogue_path'] = sxglobals.catalogue_path.replace(os.path.sep, '//') if sxglobals.catalogue_path != '' else ''
-        temp_dict['export_path'] = sxglobals.export_path.replace(os.path.sep, '//') if sxglobals.export_path != '' else ''
-        temp_dict['sxtools_path'] = sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else ''
-        temp_dict['debug'] = str(int(sxglobals.debug))
-        temp_dict['palette'] = str(int(sxglobals.palette))
-        temp_dict['palette_name'] = sxglobals.palette_name
-        temp_dict['subdivision'] = str(int(sxglobals.subdivision))
-        temp_dict['subdivision_count'] = str(sxglobals.subdivision_count)
-        temp_dict['static_vertex_colors'] = str(int(sxglobals.static_vertex_colors))
-        temp_dict['revision_export'] = str(int(sxglobals.revision_export))
-        temp_dict['share_cpus'] = str(int(sxglobals.share_cpus))
-        temp_dict['shared_cores'] = str(int(sxglobals.shared_cores))
-        temp_dict['use_nodes'] = str(int(sxglobals.use_network_nodes))
+        temp_dict = {
+            'blender_path': sxglobals.blender_path.replace(os.path.sep, '//') if sxglobals.blender_path != '' else '',
+            'catalogue_path' : sxglobals.catalogue_path.replace(os.path.sep, '//') if sxglobals.catalogue_path != '' else '',
+            'export_path': sxglobals.export_path.replace(os.path.sep, '//') if sxglobals.export_path != '' else '',
+            'sxtools_path': sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else '',
+            'debug': str(int(sxglobals.debug)),
+            'palette': str(int(sxglobals.palette)),
+            'palette_name': sxglobals.palette_name,
+            'subdivision': str(int(sxglobals.subdivision)),
+            'subdivision_count': str(sxglobals.subdivision_count),
+            'static_vertex_colors': str(int(sxglobals.static_vertex_colors)),
+            'revision_export': str(int(sxglobals.revision_export)),
+            'share_cpus': str(int(sxglobals.share_cpus)),
+            'shared_cores': str(int(sxglobals.shared_cores)),
+            'use_nodes': str(int(sxglobals.use_network_nodes))
+        }
 
         self.save_json(conf_path, temp_dict)
-        logging.info(f'SX Batcher: {conf_path} saved')
+        logging.info(f'{conf_path} saved')
 
 
     def load_asset_data(self, catalogue_path):
@@ -213,10 +214,9 @@ class SXBATCHER_init(object):
             with socket.create_connection(address, timeout=20) as sock:
                 for file in files:
                     with open(file, 'rb') as f:
-                        logging.info(f'[+] transfering {file}... ', end='')
+                        logging.info(f'transfering {file}')
                         while chunk := f.read(bufsize):
                             sock.send(chunk)
-                    logging.info('done')
             return True
         except (ConnectionResetError, TimeoutError):
             return False
@@ -259,11 +259,9 @@ class SXBATCHER_batch_manager(object):
 
         if revisions_only and len(changed_assets) > 0:
             changed_assets = list(set(changed_assets))
-            logging.info('SX Batcher: Revision changed in')
-            for asset in changed_assets:
-                logging.info(f'\t{asset}')
+            logging.info(f'Revision changed in {changed_assets}')
         elif revisions_only and len(changed_assets) == 0:
-            logging.info('SX Batcher: No revision changes in selected assets')
+            logging.info('No revision changes in selected assets')
 
         source_assets = list(set(source_assets))
 
@@ -314,7 +312,7 @@ class SXBATCHER_batch_manager(object):
                     deleted = True
                     os.remove(file)
         if deleted:
-            logging.info('SX Batcher: Cleaned batch_submissions folder')
+            logging.info('Cleaned batch_submissions folder')
 
 
     def finish_task(self, reset=False):
@@ -366,9 +364,7 @@ class SXBATCHER_batch_manager(object):
             if sxglobals.use_network_nodes:
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
-                logging.info(f'SX Batcher: Node workload distribution')
-                for node, tasks in node_tasks.items():
-                    logging.info(f'\tNode {node} - {len(tasks)} tasks')
+                logging.info(f'Node workload distribution { {node:len(tasks) for node,tasks in node_tasks.items()} }')
                 if len(node_tasks) > 0:
                     # Track tasked nodes, check completions in file_listener_thread
                     sxglobals.tasked_nodes = list(node_tasks.keys())
@@ -427,9 +423,7 @@ class SXBATCHER_batch_manager(object):
             file_path = asset.replace('//', os.path.sep)
             source_files.append(os.path.join(asset_path, file_path))
         if len(source_files) > 0:
-            logging.info(f'\nNode {sxglobals.ip_addr} source files:')
-            for file in source_files:
-                logging.info(file)
+            logging.info(f'\nNode {sxglobals.ip_addr} source files: {source_files}')
 
         # Generate task definition for each local headless Blender
         tasks = []
@@ -611,7 +605,7 @@ class SXBATCHER_batch_local(object):
                         logging.error(line)
                         counter -= 1
         except subprocess.CalledProcessError as error:
-            logging.error(f'SX Batcher Error: Blender process crashed - {source_file}')
+            logging.error(f'Blender process crashed - {source_file}')
             return (source_file)
 
 
@@ -628,9 +622,7 @@ class SXBATCHER_batch_local(object):
         export_count = len(sxglobals.remote_assignment) if len(sxglobals.remote_assignment) > 0 else len(sxglobals.export_objs) 
         logging.info(f'Node {sxglobals.ip_addr}: {export_count} objects exported in {sxglobals.now-sxglobals.then: .2f} seconds\n')
         if len(sxglobals.errors) > 0:
-            logging.error(f'Node {sxglobals.ip_addr}: Errors in:')
-            for file in sxglobals.errors:
-                logging.error(file)
+            logging.error(f'Node {sxglobals.ip_addr}: Errors in: {sxglobals.errors}')
     
         # transfer files to master node
         if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:  # and (sxglobals.ip_addr != sxglobals.master_node):
@@ -647,9 +639,9 @@ class SXBATCHER_batch_local(object):
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
                     for file in for_transfer:
                         os.remove(file)
-                    logging.info('SX Batcher: Result files transferred to master node, removed locally')
+                    logging.info('Result files transferred to master node, removed locally')
                 else:
-                    logging.error('SX Batcher: Failed to transfer result files')
+                    logging.error('Failed to transfer result files')
 
 
 # ------------------------------------------------------------------------
@@ -674,17 +666,15 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 
 
     def run(self):
+        logging.debug(f'Broadcasting {json.dumps(init.payload())}')
         while not self.stop_event.is_set():
             if sxglobals.share_cpus:
                 try:
                     self.payload = json.dumps(init.payload()).encode('utf-8')
                     self.sock.sendto(self.payload, (self.group, self.port))
-                    if __debug__:
-                        logging.debug("sent: {}".format(self.payload))
                     time.sleep(3)
-
                 except (TimeoutError, OSError):
-                    logging.info('SX Batcher: Broadcast timeout, restarting')
+                    logging.info('Broadcast timeout, restarting')
             time.sleep(0.1)
 
 
@@ -726,7 +716,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         sxglobals.nodes = nodes
 
                 except (TimeoutError, OSError):
-                    logging.info('SX Batcher: No nodes found for 10 seconds')
+                    logging.info('No nodes found for 10 seconds')
             time.sleep(0.1)
 
 
@@ -756,7 +746,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
-                    logging.info(f'[+] got connection {addr}')
+                    logging.info(f'Got connection {addr}')
 
                     # 1 - receive task data
                     b = bytearray()
@@ -782,13 +772,11 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         os.makedirs(target_dir, exist_ok=True)
 
                         with open(os.path.join(target_dir, file), 'wb') as f:
-                            logging.debug(f'[+] writing into {file}...', end='')
                             left = size
                             while left:
                                 quot, remain = divmod(left, self.bufsize)
                                 left -= f.write(conn.recv(self.bufsize if quot else remain))
-                                
-                            logging.debug(f' {f.tell()}/{size}')
+                            logging.debug(f'Wrote {file} ({f.tell()}/{size})')
                     conn.close()
                     logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
 
@@ -804,7 +792,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         for task in task_data:
                             sxglobals.remote_assignment.append(task)
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
-                                logging.info('SX Batcher: Processing remotely assigned tasks')
+                                logging.info('Processing remotely assigned tasks')
                                 gui.busy_bool.set(True)
 
                 except (OSError, TimeoutError) as error:
@@ -1444,7 +1432,9 @@ manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
-    logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
+    logging.basicConfig(encoding='utf-8', level=logging.DEBUG,
+        format='%(asctime)s SX Batcher %(levelname)s: %(message)s',
+        datefmt='%H:%M:%S')
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()

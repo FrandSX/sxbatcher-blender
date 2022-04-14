@@ -1468,6 +1468,7 @@ manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
+    logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()

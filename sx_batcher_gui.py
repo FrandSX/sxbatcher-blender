@@ -691,10 +691,11 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
                 try:
                     self.payload = json.dumps(init.payload()).encode('utf-8')
                     self.sock.sendto(self.payload, (self.group, self.port))
-                    time.sleep(3)
+                    time.sleep(3.0)
                 except (TimeoutError, OSError):
                     logging.info('Broadcast timeout, restarting')
-            time.sleep(0.1)
+            else:
+                time.sleep(1.0)
 
 
 # ------------------------------------------------------------------------
@@ -733,10 +734,12 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                                 nodes.append(node)
                         nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                         sxglobals.nodes = nodes
+                    time.sleep(1.0)
 
                 except (TimeoutError, OSError):
                     logging.info('No nodes found for 10 seconds')
-            time.sleep(0.1)
+            else:
+                time.sleep(1.0)
 
 
 # ------------------------------------------------------------------------
@@ -814,10 +817,13 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                                 logging.info('Processing remotely assigned tasks')
                                 gui.remote_task_bool.set(True)
 
+                    time.sleep(0.1)
+
                 except (OSError, TimeoutError) as error:
                     if str(error) != 'timed out':
                         logging.error(error)
-            time.sleep(0.1)
+            else:
+                time.sleep(1.0)
 
 
 # ------------------------------------------------------------------------
@@ -847,6 +853,7 @@ class SXBATCHER_gui(object):
         self.label_progress = None
         self.table_nodes = None
         self.remote_task_bool = None
+        self.node_cache = None
         return None
 
 
@@ -1176,7 +1183,9 @@ class SXBATCHER_gui(object):
         # place your timer-run refresh elements here
         def late_loop():
             if sxglobals.use_network_nodes:
-                self.refresh_node_grid()
+                if sxglobals.nodes != self.node_cache:
+                    self.refresh_node_grid()
+                    self.node_cache = sxglobals.nodes[:]
             self.window.after(1000, late_loop)
 
 

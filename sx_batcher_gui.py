@@ -256,6 +256,14 @@ class SXBATCHER_batch_manager(object):
         return obj_list
 
 
+    def remove_inactive_nodes(self):
+        nodes = []
+        for node in sxglobals.nodes:
+            if int(time.time()) - node[5] < 10:
+                nodes.append(node)
+        sxglobals.nodes = nodes[:]
+
+
     def get_source_assets(self, revisions_only=False, costs=False):
         current_revisions = init.load_revision_data()
         new_revisions = {}
@@ -670,7 +678,7 @@ class SXBATCHER_batch_local(object):
 class SXBATCHER_node_broadcast_thread(threading.Thread):
     def __init__(self, payload, group, port, timeout=10):
         super().__init__()
-        self.stop_event = threading.Event()
+        # self.stop_event = threading.Event()
         self.group = group
         self.port = port
         self.timeout = timeout
@@ -679,16 +687,16 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
         self.sock.settimeout(timeout)
 
 
-    def stop(self):
-        self.stop_event.set()
-        self.sock.close()
+    # def stop(self):
+    #     self.stop_event.set()
+    #     self.sock.close()
 
 
     def run(self):
-        logging.debug(f'Broadcasting {json.dumps(init.payload())}')
-        while not self.stop_event.is_set():
+        while True:
             if sxglobals.share_cpus:
                 try:
+                    logging.debug(f'Broadcasting {json.dumps(init.payload())}')
                     self.payload = json.dumps(init.payload()).encode('utf-8')
                     self.sock.sendto(self.payload, (self.group, self.port))
                     time.sleep(3.0)
@@ -705,7 +713,6 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 class SXBATCHER_node_discovery_thread(threading.Thread):
     def __init__(self, group, port, timeout=10):
         super().__init__()
-        self.stop_event = threading.Event()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.settimeout(timeout)
@@ -714,13 +721,8 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
 
 
-    def stop(self):
-        self.stop_event.set()
-        self.sock.close()
-
-
     def run(self):
-        while not self.stop_event.is_set():
+        while True:
             if sxglobals.use_network_nodes:
                 try:
                     received, address = self.sock.recvfrom(sxglobals.buffer_size)
@@ -732,10 +734,10 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         for node in sxglobals.nodes:
                             if node[0] != fields['address']:
                                 nodes.append(node)
-                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
+                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time())))
+                        nodes.sort(key=lambda x: x[0])
                         sxglobals.nodes = nodes
-                    time.sleep(0.5)
-
+                    time.sleep(0.05)
                 except (TimeoutError, OSError):
                     logging.info('No nodes found for 10 seconds')
             else:
@@ -749,26 +751,22 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
 class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
         super().__init__()
-        self.stop_event = threading.Event()
         self.bufsize = sxglobals.buffer_size
+        self.timeout = 5.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
-        self.sock.settimeout(30)
-
-
-    def stop(self):
-        self.stop_event.set()
-        self.sock.close()
+        self.sock.settimeout(self.timeout)
 
 
     def run(self):
-        os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
-        while not self.stop_event.is_set():
+        while True:
             if sxglobals.share_cpus or sxglobals.use_network_nodes:
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
                     logging.info(f'Got connection {addr}')
+
+                    os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
                     # 1 - receive task data
                     b = bytearray()
@@ -816,12 +814,8 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
                                 logging.info('Processing remotely assigned tasks')
                                 gui.remote_task_bool.set(True)
-
-                    time.sleep(0.1)
-
                 except (OSError, TimeoutError) as error:
-                    if str(error) != 'timed out':
-                        logging.error(error)
+                    logging.error(error)
             else:
                 time.sleep(1.0)
 
@@ -853,7 +847,7 @@ class SXBATCHER_gui(object):
         self.label_progress = None
         self.table_nodes = None
         self.remote_task_bool = None
-        self.node_cache = None
+        self.node_cache = []
         return None
 
 
@@ -1007,32 +1001,18 @@ class SXBATCHER_gui(object):
         self.state_manager('not_ready')
 
 
-    def update_table_string(self):
-        # table_string = '\nIP Address\tHost\tSystem\tCores\tStatus'
-        table_string = ''
-        for node in sxglobals.nodes:
-            for item in node:
-                table_string = table_string + str(item) + '\t'
-            table_string = table_string + '\n'
-
-        return table_string
-
-
-    def update_node_grid_data(self):
-        table_data = [['IP Address', 'Host Name', 'System', 'Cores', 'Status']]
+    def update_node_grid_data(self, height):
+        node_data = ('', '', '', '', '')
         if len(sxglobals.nodes) == 0:
-            nodes = [['', '', '', '', '']] * 5
+            nodes = [node_data]
         else:
-            nodes = sxglobals.nodes
-            nodes.sort(key=lambda x: x[0])
-
-        for node in nodes:
-            node_row = []
-            for item in node:
-                node_row.append(item)
-            table_data.append(node_row)
-
-        return table_data
+            nodes = []
+            for node in sxglobals.nodes:
+                nodes.append(node[0:5])
+            if len(sxglobals.nodes) < height:
+                for i in range(height - len(sxglobals.nodes)):
+                    nodes.append(node_data)
+        return nodes
 
 
     def table_grid(self, root, data, startrow, startcolumn):
@@ -1043,12 +1023,6 @@ class SXBATCHER_gui(object):
                 self.e = tk.Entry(root)
                 self.e.grid(row=i+startrow, column=j+startcolumn)
                 self.e.insert('end', data[i][j])
-
-
-    def refresh_node_grid(self):
-        self.table_grid(self.tab3, self.update_node_grid_data(), 5, 2)
-        if len(sxglobals.nodes) == 0:
-            self.state_manager('not_ready')
 
 
     def draw_window(self):
@@ -1072,93 +1046,66 @@ class SXBATCHER_gui(object):
             display_selected(self.cat_var.get())
 
 
-        def update_blender_path(var, index, mode):
-            sxglobals.blender_path = e1_str.get()
+        def update_path(var, index, mode):
+            if var == 'blender_path_var':
+                sxglobals.blender_path = e1_str.get()
+            elif var == 'sxtools_path_var':
+                sxglobals.sxtools_path = e2_str.get()
+            elif var == 'catalogue_path_var':
+                sxglobals.catalogue_path = e3_str.get()
+            elif var == 'export_path_var':
+                sxglobals.export_path = e4_str.get()
             self.state_manager()
 
 
-        def update_sxtools_path(var, index, mode):
-            sxglobals.sxtools_path = e2_str.get()
-            self.state_manager()
+        def update_item(var, index, mode):
+            if var == 'palette_bool' or var == 'palettename_str':
+                sxglobals.palette = c1_bool.get()
+                sxglobals.palette_name = e5_str.get()
+            elif var == 'subdivision_bool' or var == 'subdivision_int':
+                sxglobals.subdivision = c2_bool.get()
+                try:
+                    subdivisions = e6_int.get()
+                except Exception:
+                    subdivisions = 0
 
+                if subdivisions < 0:
+                    sxglobals.subdivision_count = 0
+                else:
+                    sxglobals.subdivision_count = subdivisions
+            elif var == 'flatten_bool':
+                sxglobals.static_vertex_colors = c3_bool.get()
+            elif var == 'debug_bool':
+                sxglobals.debug = c4_bool.get()
+            elif var == 'revision_bool':
+                sxglobals.revision_export = c5_bool.get()
+            elif var == 'share_cpus_bool' or var == 'share_cpus_int':
+                sxglobals.share_cpus = core_count_bool.get()
+                cpu_count = multiprocessing.cpu_count()
 
-        def update_catalogue_path(var, index, mode):
-            sxglobals.catalogue_path = e3_str.get()
-            refresh_catalogue_view()
-            self.state_manager()
+                # remove localhost from nodelist if sharing is disabled
+                if not sxglobals.share_cpus:
+                    for i, node in enumerate(sxglobals.nodes):
+                        if sxglobals.ip_addr in node:
+                            sxglobals.nodes.pop(i)
+                            break
+                try:
+                    cores = core_count_int.get()
+                except Exception:
+                    cores = cpu_count
 
-
-        def update_export_path(var, index, mode):
-            sxglobals.export_path = e4_str.get()
-            self.state_manager()
-
-
-        def update_palette_override(var, index, mode):
-            sxglobals.palette = c1_bool.get()
-            sxglobals.palette_name = e5_str.get()
-
-
-        def update_subdivision_override(var, index, mode):
-            sxglobals.subdivision = c2_bool.get()
-
-            try:
-                subdivisions = e6_int.get()
-            except Exception:
-                subdivisions = 0
-
-            if subdivisions < 0:
-                sxglobals.subdivision_count = 0
-            else:
-                sxglobals.subdivision_count = subdivisions
-
-
-        def update_flatten_override(var, index, mode):
-            sxglobals.static_vertex_colors = c3_bool.get()
-
-
-        def update_debug_override(var, index, mode):
-            sxglobals.debug = c4_bool.get()
-
-
-        def update_revision_export(var, index, mode):
-            sxglobals.revision_export = c5_bool.get()
-
-
-        def update_share_cpus(var, index, mode):
-            sxglobals.share_cpus = core_count_bool.get()
-            cpu_count = multiprocessing.cpu_count()
-
-            # remove localhost from nodelist if sharing is disabled
-            if not sxglobals.share_cpus or not sxglobals.use_network_nodes:
-                disabled = None
-                for i, node in enumerate(sxglobals.nodes):
-                    if sxglobals.ip_addr in node:
-                        disabled = i
-                        break
-                if disabled is not None:
-                    sxglobals.nodes.pop(disabled)
-
-            try:
-                cores = core_count_int.get()
-            except Exception:
-                cores = cpu_count
-
-            if cores < 0:
-                sxglobals.shared_cores = 0
-                core_count_int.set(0)
-            elif cores > cpu_count:
-                sxglobals.shared_cores = cpu_count
-                core_count_int.set(cpu_count)
-            else:
-                sxglobals.shared_cores = cores
-
-
-        def update_use_nodes(var, index, mode):
-            sxglobals.use_network_nodes = use_nodes_bool.get()
-
-            if not sxglobals.use_network_nodes:
-                sxglobals.nodes = []
-                self.refresh_node_grid()
+                if cores < 0:
+                    sxglobals.shared_cores = 0
+                    core_count_int.set(0)
+                elif cores > cpu_count:
+                    sxglobals.shared_cores = cpu_count
+                    core_count_int.set(cpu_count)
+                else:
+                    sxglobals.shared_cores = cores
+            elif var == 'use_nodes_bool':
+                sxglobals.use_network_nodes = use_nodes_bool.get()
+                if not sxglobals.use_network_nodes:
+                    sxglobals.nodes = []
 
 
         def browse_button_bp():
@@ -1182,10 +1129,17 @@ class SXBATCHER_gui(object):
 
         # place your timer-run refresh elements here
         def late_loop():
-            if sxglobals.use_network_nodes:
-                if sxglobals.nodes != self.node_cache:
-                    self.refresh_node_grid()
-                    self.node_cache = sxglobals.nodes[:]
+            manager.remove_inactive_nodes()
+
+            node_state = []
+            for node in sxglobals.nodes:
+                node_state.append(node[0:5])
+
+            if node_state != self.node_cache:
+                self.table_grid(self.tab3, self.update_node_grid_data(len(self.node_cache)), 6, 2)
+                if len(sxglobals.nodes) == 0:
+                    self.state_manager('not_ready')
+                self.node_cache = node_state
             self.window.after(1000, late_loop)
 
 
@@ -1351,20 +1305,20 @@ class SXBATCHER_gui(object):
         l4 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
         l4.grid(row=5, column=1, sticky='w', padx=10)
 
-        e1_str = tk.StringVar(self.window)
-        e2_str = tk.StringVar(self.window)
-        e3_str = tk.StringVar(self.window)
-        e4_str = tk.StringVar(self.window)
+        e1_str = tk.StringVar(self.window, name='blender_path_var')
+        e2_str = tk.StringVar(self.window, name='sxtools_path_var')
+        e3_str = tk.StringVar(self.window, name='catalogue_path_var')
+        e4_str = tk.StringVar(self.window, name='export_path_var')
 
         e1_str.set(sxglobals.blender_path)
         e2_str.set(sxglobals.sxtools_path)
         e3_str.set(sxglobals.catalogue_path)
         e4_str.set(sxglobals.export_path)
 
-        e1_str.trace_add('write', update_blender_path)
-        e2_str.trace_add('write', update_sxtools_path)
-        e3_str.trace_add('write', update_catalogue_path)
-        e4_str.trace_add('write', update_export_path)
+        e1_str.trace_add('write', update_path)
+        e2_str.trace_add('write', update_path)
+        e3_str.trace_add('write', update_path)
+        e4_str.trace_add('write', update_path)
 
         e1 = tk.Entry(tab2, textvariable=e1_str, width=60)
         e1.grid(row=2, column=2)
@@ -1393,13 +1347,13 @@ class SXBATCHER_gui(object):
         l_title2 = tk.Label(tab2, text='Overrides')
         l_title2.grid(row=6, column=1, padx=10, pady=10)
 
-        c1_bool = tk.BooleanVar(self.window)
-        c2_bool = tk.BooleanVar(self.window)
-        c3_bool = tk.BooleanVar(self.window)
-        c4_bool = tk.BooleanVar(self.window)
-        c5_bool = tk.BooleanVar(self.window)
-        e5_str = tk.StringVar(self.window)
-        e6_int = tk.IntVar(self.window, value=0)
+        c1_bool = tk.BooleanVar(self.window, name='palette_bool')
+        c2_bool = tk.BooleanVar(self.window, name='subdivision_bool')
+        c3_bool = tk.BooleanVar(self.window, name='flatten_bool')
+        c4_bool = tk.BooleanVar(self.window, name='debug_bool')
+        c5_bool = tk.BooleanVar(self.window, name='revision_bool')
+        e5_str = tk.StringVar(self.window, name='palettename_str')
+        e6_int = tk.IntVar(self.window, value=0, name='subdivision_int')
 
         c1_bool.set(sxglobals.palette)
         c2_bool.set(sxglobals.subdivision)
@@ -1409,13 +1363,13 @@ class SXBATCHER_gui(object):
         e5_str.set(sxglobals.palette_name)
         e6_int.set(sxglobals.subdivision_count)
 
-        c1_bool.trace_add('write', update_palette_override)
-        c2_bool.trace_add('write', update_subdivision_override)
-        c3_bool.trace_add('write', update_flatten_override)
-        c4_bool.trace_add('write', update_debug_override)
-        c5_bool.trace_add('write', update_revision_export)
-        e5_str.trace_add('write', update_palette_override)
-        e6_int.trace_add('write', update_subdivision_override)
+        c1_bool.trace_add('write', update_item)
+        c2_bool.trace_add('write', update_item)
+        c3_bool.trace_add('write', update_item)
+        c4_bool.trace_add('write', update_item)
+        c5_bool.trace_add('write', update_item)
+        e5_str.trace_add('write', update_item)
+        e6_int.trace_add('write', update_item)
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=7, column=1, sticky='w', padx=10)
@@ -1436,19 +1390,19 @@ class SXBATCHER_gui(object):
         # Event handling
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
 
-        # Network
+        # Network Tab ---------------------------------------------------------
         l_title_pad = tk.Label(self.tab3, text=' ')
         l_title_pad.grid(row=1, column=1, padx=10, pady=10)
         l_title3 = tk.Label(self.tab3, text='Distributed Processing')
         l_title3.grid(row=1, column=2, padx=10, pady=10)
 
-        core_count_bool = tk.BooleanVar(self.window)
-        use_nodes_bool = tk.BooleanVar(self.window)
-        core_count_int = tk.IntVar(self.window, value=sxglobals.shared_cores)
+        core_count_bool = tk.BooleanVar(self.window, name='share_cpus_bool')
+        use_nodes_bool = tk.BooleanVar(self.window, name='use_nodes_bool')
+        core_count_int = tk.IntVar(self.window, value=sxglobals.shared_cores, name='share_cpus_int')
 
-        core_count_bool.trace_add('write', update_share_cpus)
-        use_nodes_bool.trace_add('write', update_use_nodes)
-        core_count_int.trace_add('write', update_share_cpus)
+        core_count_bool.trace_add('write', update_item)
+        use_nodes_bool.trace_add('write', update_item)
+        core_count_int.trace_add('write', update_item)
 
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)
@@ -1468,6 +1422,8 @@ class SXBATCHER_gui(object):
         self.remote_task_bool = tk.BooleanVar(self.window)
         self.remote_task_bool.set(False)
         self.remote_task_bool.trace_add('write', update_remote_process)
+
+        self.table_grid(self.tab3, [['IP Address', 'Host Name', 'System', 'Cores', 'Status'], ], 5, 2)
 
         late_loop()
         self.window.mainloop()

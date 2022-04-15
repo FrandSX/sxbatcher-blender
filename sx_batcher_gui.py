@@ -668,7 +668,7 @@ class SXBATCHER_batch_local(object):
 #    Responsible for broadcasting availability of CPU resources
 # ------------------------------------------------------------------------
 class SXBATCHER_node_broadcast_thread(threading.Thread):
-    def __init__(self, payload, group, port, timeout=15):
+    def __init__(self, payload, group, port, timeout=10):
         super().__init__()
         self.stop_event = threading.Event()
         self.group = group
@@ -734,7 +734,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                                 nodes.append(node)
                         nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status']))
                         sxglobals.nodes = nodes
-                    time.sleep(1.0)
+                    time.sleep(0.5)
 
                 except (TimeoutError, OSError):
                     logging.info('No nodes found for 10 seconds')
@@ -753,7 +753,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.bufsize = sxglobals.buffer_size
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
-        self.sock.settimeout(5)
+        self.sock.settimeout(30)
 
 
     def stop(self):

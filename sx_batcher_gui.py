@@ -652,7 +652,7 @@ class SXBATCHER_batch_local(object):
             logging.error(f'Node {sxglobals.ip_addr}: Errors in: {sxglobals.errors}')
     
         # transfer files to master node
-        if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:  # and (sxglobals.ip_addr != sxglobals.master_node):
+        if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:
             payload = []
             for_transfer = []
             for root, subdirs, files in os.walk('batch_results'):
@@ -752,7 +752,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
     def __init__(self, address, port):
         super().__init__()
         self.bufsize = sxglobals.buffer_size
-        self.timeout = 5.0
+        self.timeout = 90.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((address, port))
         self.sock.settimeout(self.timeout)
@@ -764,9 +764,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
-                    self.sock.settimeout(None)
                     logging.info(f'Got connection {addr}')
-
                     os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
                     # 1 - receive task data
@@ -799,7 +797,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                                 left -= f.write(conn.recv(self.bufsize if quot else remain))
                             logging.debug(f'Wrote {file} ({f.tell()}/{size})')
                     conn.close()
-                    self.sock.settimeout(self.timeout)
                     logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
 
                     # check which nodes have finished their tasks based on connection address

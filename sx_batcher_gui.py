@@ -209,10 +209,10 @@ class SXBATCHER_init(object):
         bufsize = sxglobals.buffer_size
 
         try:
-            with socket.create_connection(address, timeout=20) as sock:
+            with socket.create_connection(address, timeout=10) as sock:
                 sock.sendall(json.dumps(payload).encode('utf-8'))
     
-            with socket.create_connection(address, timeout=20) as sock:
+            with socket.create_connection(address, timeout=60) as sock:
                 for file in files:
                     with open(file, 'rb') as f:
                         logging.info(f'transfering {file}')
@@ -764,6 +764,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
+                    self.sock.settimeout(None)
                     logging.info(f'Got connection {addr}')
 
                     os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
@@ -798,6 +799,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                                 left -= f.write(conn.recv(self.bufsize if quot else remain))
                             logging.debug(f'Wrote {file} ({f.tell()}/{size})')
                     conn.close()
+                    self.sock.settimeout(self.timeout)
                     logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
 
                     # check which nodes have finished their tasks based on connection address

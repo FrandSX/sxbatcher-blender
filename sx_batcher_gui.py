@@ -1052,6 +1052,7 @@ class SXBATCHER_gui(object):
                 sxglobals.sxtools_path = e2_str.get()
             elif var == 'catalogue_path_var':
                 sxglobals.catalogue_path = e3_str.get()
+                refresh_catalogue_view()
             elif var == 'export_path_var':
                 sxglobals.export_path = e4_str.get()
             self.state_manager()
@@ -1128,8 +1129,10 @@ class SXBATCHER_gui(object):
 
         # place your timer-run refresh elements here
         def late_loop():
+            # Filter out offline nodes
             manager.remove_inactive_nodes()
 
+            # Draw grid of nodes (exclude their lifetime variables)
             node_state = []
             for node in sxglobals.nodes:
                 node_state.append(node[0:5])
@@ -1139,6 +1142,7 @@ class SXBATCHER_gui(object):
                 if len(sxglobals.nodes) == 0:
                     self.state_manager('not_ready')
                 self.node_cache = node_state
+
             self.window.after(1000, late_loop)
 
 

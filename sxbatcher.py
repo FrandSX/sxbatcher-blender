@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (0, 1, 3),
+    'version': (0, 2, 1),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -50,6 +50,36 @@ def message_box(message='', title='SX Batcher', icon='INFO'):
         bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
+def load_asset_data(catalogue_path):
+    if len(catalogue_path) > 0:
+        try:
+            with open(catalogue_path, 'r') as input:
+                temp_dict = {}
+                temp_dict = json.load(input)
+                input.close()
+            return True, temp_dict
+        except ValueError:
+            message_box('Invalid Catalogue file. Starting from empty template.', 'SX Batcher Error', 'ERROR')
+            return True, {}
+
+        except IOError:
+            message_box('Catalogue file not found. Starting from empty template', 'SX Batcher Error', 'ERROR')
+            return True, {}
+    else:
+        message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
+        return False, None
+
+
+def save_asset_data(catalogue_path, data_dict):
+    if len(catalogue_path) > 0:
+        with open(catalogue_path, 'w') as output:
+            json.dump(data_dict, output, indent=4)
+            output.close()
+        message_box(catalogue_path + ' saved')
+    else:
+        message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
+
+
 # ------------------------------------------------------------------------
 #    UI Panel and Pie Menu
 # ------------------------------------------------------------------------
@@ -82,35 +112,6 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
     assetTags: bpy.props.StringProperty(name='Tags')
 
 
-    def load_asset_data(self, catalogue_path):
-        if len(catalogue_path) > 0:
-            try:
-                with open(catalogue_path, 'r') as input:
-                    temp_dict = {}
-                    temp_dict = json.load(input)
-                    input.close()
-                return True, temp_dict
-            except ValueError:
-                message_box('Invalid Catalogue file.', 'SX Batcher Error', 'ERROR')
-                return False, None
-            except IOError:
-                message_box('Catalogue file not found!', 'SX Batcher Error', 'ERROR')
-                return False, None
-        else:
-            message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
-            return False, None
-
-
-    def save_asset_data(self, catalogue_path, data_dict):
-        if len(catalogue_path) > 0:
-            with open(catalogue_path, 'w') as output:
-                json.dump(data_dict, output, indent=4)
-                output.close()
-            message_box(catalogue_path + ' saved')
-        else:
-            message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
-
-
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
@@ -125,7 +126,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
     def execute(self, context):
         asset_dict = {}
         prefs = context.preferences.addons['sxbatcher'].preferences
-        result, asset_dict = self.load_asset_data(prefs.cataloguepath)
+        result, asset_dict = load_asset_data(prefs.cataloguepath)
         if not result:
             return {'FINISHED'}
 
@@ -136,7 +137,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
 
         # Check if the open scene has been saved to a file
         if len(file_path) == 0:
-            message_box('Current file not saved!', 'SX Batcher Error', 'ERROR')
+            message_box('Current file has not been saved!', 'SX Batcher Error', 'ERROR')
             return {'FINISHED'}
 
         asset_path = os.path.split(prefs.cataloguepath)[0]
@@ -160,9 +161,12 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         if asset_category not in asset_dict.keys():
             asset_dict[asset_category] = {}
 
+        # Add asset to category
+        objs = [obj.name for obj in bpy.context.view_layer.objects if obj.type == 'MESH']
+        asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = {'tags': asset_tags, 'objects': objs}
+
         # Save entry with a platform-independent path separator
-        asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = asset_tags
-        self.save_asset_data(prefs.cataloguepath, asset_dict)
+        save_asset_data(prefs.cataloguepath, asset_dict)
         return {'FINISHED'}
 
 
@@ -172,38 +176,9 @@ class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
     bl_description = 'Remove current file from Catalogue'
 
 
-    def load_asset_data(self, catalogue_path):
-        if len(catalogue_path) > 0:
-            try:
-                with open(catalogue_path, 'r') as input:
-                    temp_dict = {}
-                    temp_dict = json.load(input)
-                    input.close()
-                return True, temp_dict
-            except ValueError:
-                message_box('Invalid Catalogue file.', 'SX Batcher Error', 'ERROR')
-                return False, None
-            except IOError:
-                message_box('Catalogue file not found!', 'SX Batcher Error', 'ERROR')
-                return False, None
-        else:
-            message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
-            return False, None
-
-
-    def save_asset_data(self, catalogue_path, data_dict):
-        if len(catalogue_path) > 0:
-            with open(catalogue_path, 'w') as output:
-                json.dump(data_dict, output, indent=4)
-                output.close()
-            message_box(catalogue_path + ' saved')
-        else:
-            message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
-
-
     def invoke(self, context, event):
         prefs = context.preferences.addons['sxbatcher'].preferences
-        result, asset_dict = self.load_asset_data(prefs.cataloguepath)
+        result, asset_dict = load_asset_data(prefs.cataloguepath)
         if not result:
             return {'FINISHED'}
 
@@ -225,7 +200,7 @@ class SXBATCHER_OT_catalogue_remove(bpy.types.Operator):
         for asset_category in asset_dict.keys():
             asset_dict[asset_category].pop(file_rel_path.replace(os.path.sep, '//'), None)
 
-        self.save_asset_data(prefs.cataloguepath, asset_dict)
+        save_asset_data(prefs.cataloguepath, asset_dict)
         return {'FINISHED'}
 
 

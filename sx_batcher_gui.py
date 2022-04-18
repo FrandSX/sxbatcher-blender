@@ -31,6 +31,7 @@ class SXBATCHER_globals(object):
         self.shared_cores = int(conf.get('shared_cores', 0))
         self.use_network_nodes = bool(int(conf.get('use_nodes', False)))
         self.ip_addr = init.get_ip()
+        self.performance_index = int(conf.get('performance_index', 0))
 
         self.then = None
         self.now = None
@@ -121,6 +122,7 @@ class SXBATCHER_init(object):
             "host": socket.gethostname(),
             "system": platform.system(),
             "cores": str(sxglobals.shared_cores),
+            "performance_index": str(sxglobals.performance_index),
             "status": "Busy" if sxglobals.node_busy_status else "Idle"
         }
 
@@ -173,6 +175,7 @@ class SXBATCHER_init(object):
             'share_cpus': str(int(sxglobals.share_cpus)),
             'shared_cores': str(int(sxglobals.shared_cores)),
             'use_nodes': str(int(sxglobals.use_network_nodes)),
+            'performance_index': str(sxglobals.performance_index),
             'nodes': sxglobals.nodes
         }
 
@@ -370,6 +373,31 @@ class SXBATCHER_batch_manager(object):
             self.delete_submissions()
 
 
+    def benchmark(self):
+        benchmark_task = (
+            sxglobals.blender_path,
+            'perf_test.blend',
+            str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
+            str(os.path.dirname(__file__)),
+            os.path.abspath(sxglobals.sxtools_path),
+            None,
+            None,
+            False,
+            False
+            )
+        then = time.perf_counter()
+        t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
+        t.start()
+        t.join()
+        now = time.perf_counter()
+        logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f}')
+        sxglobals.performance_index = round(now-then, 2)
+        try:
+            os.remove(str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'Suzanne_root.fbx'))
+        except OSError:
+            pass
+
+
     # Handles task assignments:
     # 1) Local-only batch processing assigned via GUI
     # 2) Distributed batch processing assigned via GUI
@@ -528,7 +556,7 @@ class SXBATCHER_batch_manager(object):
                 node_ip = node[0]
                 node_tasks[node_ip] = []
 
-            method = 2  # 1 naive, 2 cost-based
+            method = 3  # 1 naive, 2 cost-based
             if method == 1:
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)
@@ -569,6 +597,41 @@ class SXBATCHER_batch_manager(object):
                             start += 1
 
                     node_tasks[node_ip] = task_list
+
+            elif method == 3:
+                # Cost-and-bias based method: Divide tasks per node
+                perfs = []
+                for node in sxglobals.nodes:
+                    perfs.append(float(node[6]))
+                max_perf = max(perfs)
+
+                bias_cores = []
+                for node in sxglobals.nodes:
+                    bias_cores.append(int((float(node[6]) / max_perf) * float(node[3])))
+
+                total_cores += core_count for core_count in bias_cores
+
+                total_cost = 0
+                for asset in source_assets:
+                    total_cost += asset[1]
+
+                # Allocate (and adjust) work share bias
+                start = 0
+                for i, node in enumerate(sxglobals.nodes):
+                    node_ip = node[0]
+                    num_cores = bias_cores[i]
+                    task_list = []
+                    bias = 0
+                    cost_share = total_cost * float(num_cores) / float(total_cores)
+
+                    for i in range(start, len(tasks)):
+                        if cost_share > 0:
+                            task_list.append(tasks[i])
+                            cost_share -= source_assets[i][1]
+                            start += 1
+
+                    node_tasks[node_ip] = task_list
+
 
         # remove empty task lists
         empty_nodes = []
@@ -734,7 +797,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         for node in sxglobals.nodes:
                             if node[0] != fields['address']:
                                 nodes.append(node)
-                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time())))
+                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time(), fields['performance_index'])))
                         nodes.sort(key=lambda x: x[0])
                         sxglobals.nodes = nodes
                     time.sleep(0.05)
@@ -1082,6 +1145,9 @@ class SXBATCHER_gui(object):
             elif var == 'share_cpus_bool' or var == 'share_cpus_int':
                 sxglobals.share_cpus = core_count_bool.get()
                 cpu_count = multiprocessing.cpu_count()
+
+                if sxglobals.share_cpus and sxglobals.performance_index == 0:
+                    manager.benchmark()
 
                 # remove localhost from nodelist if sharing is disabled
                 if not sxglobals.share_cpus:

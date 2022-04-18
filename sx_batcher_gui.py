@@ -541,7 +541,7 @@ class SXBATCHER_batch_manager(object):
                             if workload > i:
                                 task_list.append(tasks[len(tasks) - workload])
                                 workload -= 1
-                        node_tasks[node_ip].append(task_list)
+                        node_tasks[node_ip].extend(task_list)
 
             elif method == 2:
                 # Cost based method: Divide tasks per node

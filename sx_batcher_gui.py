@@ -804,7 +804,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         for node in sxglobals.nodes:
                             if node[0] != fields['address']:
                                 nodes.append(node)
-                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time(), fields['performance_index'])))
+                        nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time()), fields['performance_index']))
                         nodes.sort(key=lambda x: x[0])
                         sxglobals.nodes = nodes
                     time.sleep(0.05)

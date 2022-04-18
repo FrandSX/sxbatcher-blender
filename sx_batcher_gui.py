@@ -609,7 +609,9 @@ class SXBATCHER_batch_manager(object):
                 for node in sxglobals.nodes:
                     bias_cores.append(int((float(node[6]) / max_perf) * float(node[3])))
 
-                total_cores += core_count for core_count in bias_cores
+                total_cores = 0
+                for cores in bias_cores:
+                    total_cores += cores
 
                 total_cost = 0
                 for asset in source_assets:

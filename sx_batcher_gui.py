@@ -385,17 +385,17 @@ class SXBATCHER_batch_manager(object):
             False,
             False
             )
-        then = time.perf_counter()
-        t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
-        t.start()
-        t.join()
-        now = time.perf_counter()
-        logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f}')
-        sxglobals.performance_index = round(now-then, 2)
         try:
+            then = time.perf_counter()
+            t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
+            t.start()
+            t.join()
+            now = time.perf_counter()
+            logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f} seconds')
+            sxglobals.performance_index = round(now-then, 2)
             os.remove(str(os.path.join(os.path.realpath('batch_results'), 'paletted/Suzanne_root.fbx')))
         except OSError:
-            pass
+            sxglobals.performance_index = 0
 
 
     # Handles task assignments:
@@ -556,7 +556,12 @@ class SXBATCHER_batch_manager(object):
                 node_ip = node[0]
                 node_tasks[node_ip] = []
 
-            method = 3  # 1 naive, 2 cost-based
+            # if any node has failed the benchmark, fall back to method 2
+            method = 3
+            for node in sxglobals.nodes:
+                if int(node[6]) == 0:
+                    method = 2
+
             if method == 1:
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)

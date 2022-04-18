@@ -559,7 +559,7 @@ class SXBATCHER_batch_manager(object):
             # if any node has failed the benchmark, fall back to method 2
             method = 3
             for node in sxglobals.nodes:
-                if int(node[6]) == 0:
+                if node[6] == '0':
                     method = 2
 
             if method == 1:

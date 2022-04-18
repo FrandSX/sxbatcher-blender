@@ -31,7 +31,7 @@ class SXBATCHER_globals(object):
         self.shared_cores = int(conf.get('shared_cores', 0))
         self.use_network_nodes = bool(int(conf.get('use_nodes', False)))
         self.ip_addr = init.get_ip()
-        self.performance_index = int(conf.get('performance_index', 0))
+        self.performance_index = float(conf.get('performance_index', 0))
 
         self.then = None
         self.now = None
@@ -378,7 +378,7 @@ class SXBATCHER_batch_manager(object):
             sxglobals.blender_path,
             'perf_test.blend',
             str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
-            str(os.path.dirname(__file__)),
+            str(os.path.realpath('batch_results')),
             os.path.abspath(sxglobals.sxtools_path),
             None,
             None,
@@ -393,7 +393,7 @@ class SXBATCHER_batch_manager(object):
         logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f}')
         sxglobals.performance_index = round(now-then, 2)
         try:
-            os.remove(str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'Suzanne_root.fbx'))
+            os.remove(str(os.path.join(os.path.realpath('batch_results'), 'paletted/Suzanne_root.fbx')))
         except OSError:
             pass
 

@@ -1519,7 +1519,7 @@ gui = SXBATCHER_gui()
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--logfile', help='Logfile name')
-    parser.add_argument('--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'])
+    parser.add_argument('--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'], default='info')
     args = parser.parse_args()
     gui.debug_var.set(args.loglevel.capitalize())
     logging.basicConfig(**{ k:v for k,v in (

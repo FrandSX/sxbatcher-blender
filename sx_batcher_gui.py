@@ -218,7 +218,7 @@ class SXBATCHER_init(object):
             with socket.create_connection(address, timeout=60) as sock:
                 for file in files:
                     with open(file, 'rb') as f:
-                        logging.info(f'transfering {file}')
+                        logging.debug(f'Transferring {file}')
                         while chunk := f.read(bufsize):
                             sock.send(chunk)
             return True
@@ -345,7 +345,7 @@ class SXBATCHER_batch_manager(object):
                     deleted = True
                     os.remove(file)
         if deleted:
-            logging.info('Cleaned batch_submissions folder')
+            logging.debug('Cleaned batch_submissions folder')
 
 
     def finish_task(self, reset=False):
@@ -357,11 +357,14 @@ class SXBATCHER_batch_manager(object):
 
             if len(sxglobals.errors) > 0:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds\n'
+                logging.error(f'Node {sxglobals.ip_addr}: {label_string}')
                 label_string += 'Errors in:\n'
                 for file in sxglobals.errors:
                     label_string += file+'\n'
+                    logging.error(f'Node {sxglobals.ip_addr}: {file}')
             else:
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
+                logging.info(f'Node {sxglobals.ip_addr}: {label_string}')
 
         gui.state_manager('ready', label=label_string)
         sxglobals.errors = []
@@ -440,7 +443,7 @@ class SXBATCHER_batch_manager(object):
 
                         if len(source_files) > 0:
                             if init.transfer_files((node_ip, sxglobals.file_transfer_port), (payload, source_files)):
-                                pass
+                                logging.info(f'{len(source_files)} source files transferred to Node {node_ip}')
                             else:
                                 self.finish_task(reset=True)
                 else:
@@ -553,7 +556,7 @@ class SXBATCHER_batch_manager(object):
                     "cost": asset[1]
                 })
 
-            print('source assets:', len(tasks))
+            logging.debug(f'Source asset count: {len(tasks)}')
 
             # Sort nodes by performance rating
             nodes = sxglobals.nodes[:]
@@ -590,7 +593,7 @@ class SXBATCHER_batch_manager(object):
                 total_cost = 0
                 for asset in source_assets:
                     total_cost += asset[1]
-                print('total cost:', total_cost)
+                logging.debug(f'Total cost: {total_cost}')
 
                 # Allocate work share
                 start = 0
@@ -598,7 +601,7 @@ class SXBATCHER_batch_manager(object):
                     node_ip = node[0]
                     num_cores = int(node[3])
                     cost_share = total_cost * (float(num_cores) / float(total_cores))
-                    print('Cost share:', node_ip, cost_share)
+                    logging.debug(f'Cost share: {node_ip} {cost_shares[i]}')
 
                     for i in range(start, len(tasks)):
                         if cost_share > 0:
@@ -621,6 +624,7 @@ class SXBATCHER_batch_manager(object):
                 total_cost = 0
                 for asset in source_assets:
                     total_cost += asset[1]
+                logging.debug(f'Total cost: {total_cost}')
 
                 cost_shares = []
                 for num_cores in bias_cores:
@@ -630,7 +634,7 @@ class SXBATCHER_batch_manager(object):
                 start = 0
                 for i, node in enumerate(nodes):
                     node_ip = node[0]
-                    print('Cost share:', node_ip, cost_shares[i])
+                    logging.debug(f'Cost share: {node_ip} {cost_shares[i]}')
 
                     for j in range(start, len(tasks)):
                         if cost_shares[i] > 0:
@@ -700,12 +704,12 @@ class SXBATCHER_batch_local(object):
                         logging.error(line)
                         counter -= 1
         except subprocess.CalledProcessError as error:
-            logging.error(f'Blender process crashed - {source_file}')
+            logging.critical(f'Blender process crashed - {source_file}')
             return (source_file)
 
 
     def worker_spawner(self, tasks, num_cores):
-        logging.info(f'Node {sxglobals.ip_addr} spawning workers')
+        logging.debug(f'Node {sxglobals.ip_addr} spawning workers')
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
@@ -734,9 +738,9 @@ class SXBATCHER_batch_local(object):
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
                     for file in for_transfer:
                         os.remove(file)
-                    logging.info('Result files transferred to master node, removed locally')
+                    logging.info(f'{len(for_transfer)} result files transferred to Node {sxglobals.master_node}, removed locally')
                 else:
-                    logging.error('Failed to transfer result files')
+                    logging.critical('Failed to transfer result files')
 
 
 # ------------------------------------------------------------------------
@@ -769,7 +773,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
                     self.sock.sendto(self.payload, (self.group, self.port))
                     time.sleep(3.0)
                 except (TimeoutError, OSError):
-                    logging.info('Broadcast timeout, restarting')
+                    logging.debug('Broadcast timeout, restarting')
             else:
                 time.sleep(1.0)
 
@@ -807,7 +811,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                         sxglobals.nodes = nodes
                     time.sleep(0.05)
                 except (TimeoutError, OSError):
-                    logging.info('No nodes found for 10 seconds')
+                    logging.debug('No nodes found for 10 seconds')
             else:
                 time.sleep(1.0)
 
@@ -832,7 +836,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
-                    logging.info(f'Got connection {addr}')
+                    logging.debug(f'Got connection {addr}')
                     os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
                     # 1 - receive task data
@@ -843,7 +847,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             break
                         b.extend(chunk)
                     task_data = json.loads(b.decode('utf-8'))
-                    logging.info(f'Node {sxglobals.ip_addr}: Task data received')
+                    logging.debug(f'Node {sxglobals.ip_addr}: Task data received')
                     conn.close()
 
                     file_meta = task_data.pop(0)
@@ -865,13 +869,15 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                                 left -= f.write(conn.recv(self.bufsize if quot else remain))
                             logging.debug(f'Wrote {file} ({f.tell()}/{size})')
                     conn.close()
-                    logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received')
+                    logging.info(f'Node {sxglobals.ip_addr}: {len(transfer_data)} files received from Node {addr[0]}')
 
                     # check which nodes have finished their tasks based on connection address
                     if (addr[0] in sxglobals.tasked_nodes) and (task_data[0]['magic'] != sxglobals.magic_task):
                         sxglobals.tasked_nodes.remove(addr[0])
+                        logging.info(f'Node {addr[0]} completed tasks')
                         if len(sxglobals.tasked_nodes) == 0:
                             sxglobals.now = time.perf_counter()
+                            logging.info(f'All nodes finished')
                             manager.finish_task()
 
                     if sxglobals.share_cpus and (task_data is not None) and (task_data[0]['magic'] == sxglobals.magic_task):
@@ -879,7 +885,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         for task in task_data:
                             sxglobals.remote_assignment.append(task)
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
-                                logging.info('Processing remotely assigned tasks')
+                                logging.info(f'Node {sxglobals.ip_addr}: Processing {len(sxglobals.remote_assignment)} remotely assigned source files')
                                 gui.remote_task_bool.set(True)
                 except (OSError, TimeoutError) as error:
                     logging.error(error)
@@ -1177,7 +1183,16 @@ class SXBATCHER_gui(object):
                 sxglobals.use_network_nodes = use_nodes_bool.get()
                 if not sxglobals.use_network_nodes:
                     sxglobals.nodes = []
-
+            elif var == 'debug_level_var':
+                debug_level = debug_var.get()
+                debug_levels = {
+                    'Debug': logging.DEBUG,
+                    'Info': logging.INFO,
+                    'Warning': logging.WARNING,
+                    'Error': logging.ERROR,
+                    'Critical': logging.CRITICAL
+                }
+                logging.getLogger().setLevel(debug_levels[debug_level])
 
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
@@ -1461,6 +1476,20 @@ class SXBATCHER_gui(object):
         e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
         e6.grid(row=8, column=2, sticky='w')
 
+        # Debug Level
+        l_title3 = tk.Label(tab2, text='Debug Level')
+        l_title3.grid(row=13, column=1, padx=10, pady=10)
+
+        debug_var = tk.StringVar(self.window, name='debug_level_var')
+        debug_var.set('Info')
+
+        debug_dropdown = ttk.Combobox(tab2, textvariable=debug_var)
+        debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
+        debug_dropdown['state'] = 'readonly'
+        debug_dropdown.grid(row=13, column=2, sticky='w')
+
+        debug_var.trace_add('write', update_item)
+
         # Event handling
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
 
@@ -1515,7 +1544,7 @@ manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
-    logging.basicConfig(encoding='utf-8', level=logging.DEBUG,
+    logging.basicConfig(encoding='utf-8', level=logging.INFO,
         format='%(asctime)s SX Batcher %(levelname)s: %(message)s',
         datefmt='%H:%M:%S')
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)

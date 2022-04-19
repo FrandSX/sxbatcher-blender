@@ -1087,8 +1087,6 @@ class SXBATCHER_gui(tk.Tk):
         super().__init__()
         self.title = 'SX Batcher'
         self.node_cache = []
-
-        self.window = None
         self.tabs = None
         self.tab3 = None
         self.frame_a = None
@@ -1110,7 +1108,6 @@ class SXBATCHER_gui(tk.Tk):
         self.label_progress = None
         self.table_nodes = None
         self.remote_task_bool = None
-        self.node_cache = []
 
 
         def update_remote_process(var, index, mode):

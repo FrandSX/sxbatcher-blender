@@ -1,4 +1,5 @@
 import logging
+import signal
 import argparse
 import threading
 import subprocess
@@ -94,6 +95,19 @@ class SXBATCHER_globals(object):
             self.sxtools_path = self.sxtools_path.replace('//', os.path.sep) if os.path.isdir(self.sxtools_path.replace('//', os.path.sep)) else ''
 
         return (self.blender_path != '') and (self.catalogue_path != '') and (self.export_path != '') and (self.sxtools_path != '')
+
+
+# ------------------------------------------------------------------------
+#    Exit Handler
+# ------------------------------------------------------------------------
+class SXBATCHER_exit_handler:
+  kill_now = False
+  def __init__(self):
+    signal.signal(signal.SIGINT, self.exit_gracefully)
+    signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+  def exit_gracefully(self,signum, frame):
+    self.kill_now = True
 
 
 # ------------------------------------------------------------------------
@@ -898,7 +912,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 #    GUI
 # ------------------------------------------------------------------------
 class SXBATCHER_gui(tk.Tk):
-
     def state_manager(self, state=None, label=None):
         if state is None:
             if not sxglobals.use_network_nodes and sxglobals.validate_paths() and (self.lb_export.size() > 0):
@@ -1074,6 +1087,31 @@ class SXBATCHER_gui(tk.Tk):
         super().__init__()
         self.title = 'SX Batcher'
         self.node_cache = []
+
+        self.window = None
+        self.tabs = None
+        self.tab3 = None
+        self.frame_a = None
+        self.frame_b = None
+        self.frame_c = None
+        self.frame_items = None
+        self.cat_var = None
+        self.dropdown = None
+        self.lb_items = None
+        self.lb_export = None
+        self.text_tags = None
+        self.label_category = None
+        self.label_item_count = None
+        self.var_item_count = None
+        self.var_export_count = None
+        self.var_tag = None
+        self.button_start_batch = None
+        self.progress_bar = None
+        self.label_progress = None
+        self.table_nodes = None
+        self.remote_task_bool = None
+        self.node_cache = []
+
 
         def update_remote_process(var, index, mode):
              if self.remote_task_bool.get():
@@ -1511,6 +1549,7 @@ class SXBATCHER_gui(tk.Tk):
 # ------------------------------------------------------------------------
 
 init = SXBATCHER_init()
+exit_handler = SXBATCHER_exit_handler()
 sxglobals = SXBATCHER_globals()
 manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
@@ -1542,3 +1581,14 @@ if __name__ == '__main__':
     file_receiving_thread.start()
 
     gui.mainloop()
+
+    # Main loop for headless operation
+    if False:
+        while not exit_handler.kill_now:
+            if not sxglobals.exporting:
+                if check_tasks():
+                    start_export()
+                else:
+                    sleep(0.01)
+
+    logging.info('SX Batcher: Exiting gracefully')

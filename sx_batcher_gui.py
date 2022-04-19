@@ -1,4 +1,5 @@
 import logging
+import argparse
 import threading
 import subprocess
 import multiprocessing
@@ -1544,9 +1545,18 @@ manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
-    logging.basicConfig(encoding='utf-8', level=logging.INFO,
-        format='%(asctime)s SX Batcher %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--logfile', help='Logfile name')
+    parser.add_argument('--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'])
+    args = parser.parse_args()
+
+    logging.basicConfig(**{ k:v for k,v in (
+        ('encoding', 'utf-8'),
+        ('format', '%(asctime)s SX Batcher %(levelname)s: %(message)s'),
+        ('datefmt','%H:%M:%S'),
+        ('filename', pathlib.Path(__file__).parent.resolve() / (pathlib.Path(args.logfile).stem + '.log') if args.logfile else None),
+        ('level', getattr(logging, args.loglevel.upper()) if args.loglevel else None)
+    ) if v })
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()

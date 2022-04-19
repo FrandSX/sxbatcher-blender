@@ -156,6 +156,10 @@ class SXBATCHER_init(object):
         parser.add_argument('-ll', '--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'], default='info')
         all_arguments, ignored = parser.parse_known_args()
 
+        return all_arguments
+
+
+    def update_globals(self, args):
         # Update path globals
         if args.blenderpath is not None:
             sxglobals.blender_path = os.path.abspath(args.blenderpath)
@@ -193,8 +197,6 @@ class SXBATCHER_init(object):
             sxglobals.use_network_nodes = True
         if args.dryrun:
             listonly = args.dryrun
-
-        return all_arguments
 
 
     def payload(self):
@@ -1621,6 +1623,7 @@ gui = SXBATCHER_gui()
 
 if __name__ == '__main__':
     args = init.get_args()
+    init.update_globals(args)
     gui.debug_var.set(args.loglevel.capitalize())
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),

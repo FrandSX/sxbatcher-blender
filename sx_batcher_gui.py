@@ -481,7 +481,7 @@ class SXBATCHER_batch_manager(object):
             file_path = asset.replace('//', os.path.sep)
             source_files.append(os.path.join(asset_path, file_path))
         if len(source_files) > 0:
-            logging.info(f'\nNode {sxglobals.ip_addr} source files: {source_files}')
+            logging.debug(f'\nNode {sxglobals.ip_addr} source files: {source_files}')
 
         # Generate task definition for each local headless Blender
         tasks = []
@@ -601,7 +601,7 @@ class SXBATCHER_batch_manager(object):
                     node_ip = node[0]
                     num_cores = int(node[3])
                     cost_share = total_cost * (float(num_cores) / float(total_cores))
-                    logging.debug(f'Cost share: {node_ip} {cost_shares[i]}')
+                    logging.debug(f'Cost share: {node_ip} {cost_share}')
 
                     for i in range(start, len(tasks)):
                         if cost_share > 0:
@@ -888,7 +888,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                                 logging.info(f'Node {sxglobals.ip_addr}: Processing {len(sxglobals.remote_assignment)} remotely assigned source files')
                                 gui.remote_task_bool.set(True)
                 except (OSError, TimeoutError) as error:
-                    logging.error(error)
+                    logging.debug(f'Node {sxglobals.ip_addr} {error}')
             else:
                 time.sleep(1.0)
 

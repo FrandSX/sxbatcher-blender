@@ -1,4 +1,5 @@
 import logging
+import argparse
 import threading
 import subprocess
 import multiprocessing
@@ -896,33 +897,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 # ------------------------------------------------------------------------
 #    GUI
 # ------------------------------------------------------------------------
-class SXBATCHER_gui(object):
-    def __init__(self):
-        self.window = None
-        self.tabs = None
-        self.tab3 = None
-        self.frame_a = None
-        self.frame_b = None
-        self.frame_c = None
-        self.frame_items = None
-        self.cat_var = None
-        self.dropdown = None
-        self.lb_items = None
-        self.lb_export = None
-        self.text_tags = None
-        self.label_category = None
-        self.label_item_count = None
-        self.var_item_count = None
-        self.var_export_count = None
-        self.var_tag = None
-        self.button_start_batch = None
-        self.progress_bar = None
-        self.label_progress = None
-        self.table_nodes = None
-        self.remote_task_bool = None
-        self.node_cache = []
-        return None
-
+class SXBATCHER_gui(tk.Tk):
 
     def state_manager(self, state=None, label=None):
         if state is None:
@@ -1052,14 +1027,11 @@ class SXBATCHER_gui(object):
         if not t.is_alive():
             manager.finish_task()
         else:
-            self.window.after(1000, self.check_progress, t)
+            self.after(1000, self.check_progress, t)
 
 
     def refresh_lb_items(self):
-        if self.lb_items is not None:
-            self.lb_items.delete(0, 'end')
-        else:
-            self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
+        self.lb_items.delete(0, 'end')
         self.lb_items = self.list_objs(manager.get_category_objs(sxglobals.active_category), self.lb_items)
 
 
@@ -1098,7 +1070,11 @@ class SXBATCHER_gui(object):
                 self.e.insert('end', data[i][j])
 
 
-    def draw_window(self):
+    def __init__(self):
+        super().__init__()
+        self.title = 'SX Batcher'
+        self.node_cache = []
+
         def update_remote_process(var, index, mode):
              if self.remote_task_bool.get():
                 self.state_manager('remote')
@@ -1184,7 +1160,7 @@ class SXBATCHER_gui(object):
                 if not sxglobals.use_network_nodes:
                     sxglobals.nodes = []
             elif var == 'debug_level_var':
-                debug_level = debug_var.get()
+                debug_level = self.debug_var.get()
                 debug_levels = {
                     'Debug': logging.DEBUG,
                     'Info': logging.INFO,
@@ -1229,14 +1205,11 @@ class SXBATCHER_gui(object):
                     self.state_manager('not_ready')
                 self.node_cache = node_state
 
-            self.window.after(1000, late_loop)
+            self.after(1000, late_loop)
 
-
-        self.window = tk.Tk()
-        self.window.title('SX Batcher')
 
         # Top tabs ------------------------------------------------------------
-        self.tabs = ttk.Notebook(self.window)
+        self.tabs = ttk.Notebook(self)
         tab1 = ttk.Frame(self.tabs)
         tab2 = ttk.Frame(self.tabs)
         self.tab3 = ttk.Frame(self.tabs)
@@ -1265,6 +1238,7 @@ class SXBATCHER_gui(object):
 
         # source object list
         self.frame_items = tk.Frame(master=self.frame_a)
+        self.lb_items = tk.Listbox(master=self.frame_items, selectmode='multiple')
         self.refresh_lb_items()
         self.lb_items.pack(side='left', fill='both', expand=True)
         scrollbar_items = tk.Scrollbar(master=self.frame_items)
@@ -1311,7 +1285,7 @@ class SXBATCHER_gui(object):
         button_batch_selected.pack(pady=20)
 
 
-        self.var_tag = tk.StringVar(self.window)
+        self.var_tag = tk.StringVar(self)
         tag_entry = tk.Entry(master=self.frame_b, textvariable=self.var_tag)
         tag_entry.pack()
         button_batch_tagged = tk.Button(
@@ -1394,10 +1368,10 @@ class SXBATCHER_gui(object):
         l4 = tk.Label(tab2, text='Export Path:', width=20, justify='left', anchor='w')
         l4.grid(row=5, column=1, sticky='w', padx=10)
 
-        e1_str = tk.StringVar(self.window, name='blender_path_var')
-        e2_str = tk.StringVar(self.window, name='sxtools_path_var')
-        e3_str = tk.StringVar(self.window, name='catalogue_path_var')
-        e4_str = tk.StringVar(self.window, name='export_path_var')
+        e1_str = tk.StringVar(self, name='blender_path_var')
+        e2_str = tk.StringVar(self, name='sxtools_path_var')
+        e3_str = tk.StringVar(self, name='catalogue_path_var')
+        e4_str = tk.StringVar(self, name='export_path_var')
 
         e1_str.set(sxglobals.blender_path)
         e2_str.set(sxglobals.sxtools_path)
@@ -1436,13 +1410,13 @@ class SXBATCHER_gui(object):
         l_title2 = tk.Label(tab2, text='Overrides')
         l_title2.grid(row=6, column=1, padx=10, pady=10)
 
-        c1_bool = tk.BooleanVar(self.window, name='palette_bool')
-        c2_bool = tk.BooleanVar(self.window, name='subdivision_bool')
-        c3_bool = tk.BooleanVar(self.window, name='flatten_bool')
-        c4_bool = tk.BooleanVar(self.window, name='debug_bool')
-        c5_bool = tk.BooleanVar(self.window, name='revision_bool')
-        e5_str = tk.StringVar(self.window, name='palettename_str')
-        e6_int = tk.IntVar(self.window, value=0, name='subdivision_int')
+        c1_bool = tk.BooleanVar(self, name='palette_bool')
+        c2_bool = tk.BooleanVar(self, name='subdivision_bool')
+        c3_bool = tk.BooleanVar(self, name='flatten_bool')
+        c4_bool = tk.BooleanVar(self, name='debug_bool')
+        c5_bool = tk.BooleanVar(self, name='revision_bool')
+        e5_str = tk.StringVar(self, name='palettename_str')
+        e6_int = tk.IntVar(self, value=0, name='subdivision_int')
 
         c1_bool.set(sxglobals.palette)
         c2_bool.set(sxglobals.subdivision)
@@ -1480,15 +1454,15 @@ class SXBATCHER_gui(object):
         l_title3 = tk.Label(tab2, text='Debug Level')
         l_title3.grid(row=13, column=1, padx=10, pady=10)
 
-        debug_var = tk.StringVar(self.window, name='debug_level_var')
-        debug_var.set('Info')
+        self.debug_var = tk.StringVar(self, name='debug_level_var')
+        # self.debug_var.set('Info')
 
-        debug_dropdown = ttk.Combobox(tab2, textvariable=debug_var)
-        debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
-        debug_dropdown['state'] = 'readonly'
-        debug_dropdown.grid(row=13, column=2, sticky='w')
+        self.debug_dropdown = ttk.Combobox(tab2, textvariable=self.debug_var)
+        self.debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
+        self.debug_dropdown['state'] = 'readonly'
+        self.debug_dropdown.grid(row=13, column=2, sticky='w')
 
-        debug_var.trace_add('write', update_item)
+        self.debug_var.trace_add('write', update_item)
 
         # Event handling
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
@@ -1499,9 +1473,9 @@ class SXBATCHER_gui(object):
         l_title3 = tk.Label(self.tab3, text='Distributed Processing')
         l_title3.grid(row=1, column=2, padx=10, pady=10)
 
-        core_count_bool = tk.BooleanVar(self.window, name='share_cpus_bool')
-        use_nodes_bool = tk.BooleanVar(self.window, name='use_nodes_bool')
-        core_count_int = tk.IntVar(self.window, value=sxglobals.shared_cores, name='share_cpus_int')
+        core_count_bool = tk.BooleanVar(self, name='share_cpus_bool')
+        use_nodes_bool = tk.BooleanVar(self, name='use_nodes_bool')
+        core_count_int = tk.IntVar(self, value=sxglobals.shared_cores, name='share_cpus_int')
 
         core_count_bool.trace_add('write', update_item)
         use_nodes_bool.trace_add('write', update_item)
@@ -1522,14 +1496,13 @@ class SXBATCHER_gui(object):
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
         l_title5.grid(row=4, column=2, padx=10, pady=10)
 
-        self.remote_task_bool = tk.BooleanVar(self.window)
+        self.remote_task_bool = tk.BooleanVar(self)
         self.remote_task_bool.set(False)
         self.remote_task_bool.trace_add('write', update_remote_process)
 
         self.table_grid(self.tab3, [['IP Address', 'Host Name', 'System', 'Cores', 'Status'], ], 5, 2)
 
         late_loop()
-        self.window.mainloop()
 
 
 # ------------------------------------------------------------------------
@@ -1539,14 +1512,23 @@ class SXBATCHER_gui(object):
 
 init = SXBATCHER_init()
 sxglobals = SXBATCHER_globals()
-gui = SXBATCHER_gui()
 manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
+gui = SXBATCHER_gui()
 
 if __name__ == '__main__':
-    logging.basicConfig(encoding='utf-8', level=logging.INFO,
-        format='%(asctime)s SX Batcher %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--logfile', help='Logfile name')
+    parser.add_argument('--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'])
+    args = parser.parse_args()
+    gui.debug_var.set(args.loglevel.capitalize())
+    logging.basicConfig(**{ k:v for k,v in (
+        ('encoding', 'utf-8'),
+        ('format', '%(asctime)s SX Batcher %(levelname)s: %(message)s'),
+        ('datefmt','%H:%M:%S'),
+        ('filename', pathlib.Path(__file__).parent.resolve() / (pathlib.Path(args.logfile).stem + '.log') if args.logfile else None),
+        ('level', getattr(logging, args.loglevel.upper()) if args.loglevel else None)
+    ) if v })
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()
@@ -1559,4 +1541,4 @@ if __name__ == '__main__':
     file_receiving_thread.daemon = True
     file_receiving_thread.start()
 
-    gui.draw_window()
+    gui.mainloop()

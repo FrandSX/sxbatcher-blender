@@ -130,6 +130,73 @@ class SXBATCHER_init(object):
         return ip
 
 
+    def get_args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-b', '--blenderpath', default=sxglobals.blender_path, help='Blender executable location')
+        parser.add_argument('-o', '--open', default=sxglobals.catalogue_path, help='Open a Catalogue file')
+        parser.add_argument('-s', '--sxtools', default=sxglobals.sxtools_path, help='SX Tools folder')
+        parser.add_argument('-e', '--exportpath', default=sxglobals.export_path, help='Export path')
+        parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
+        parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
+        parser.add_argument('-f', '--filename', help='Export an object by filename')
+        parser.add_argument('-t', '--tag', help='Export all tagged objects')
+        parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
+        parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
+        parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
+        parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
+        parser.add_argument('-v', '--verbose', action='store_true', help='Display Blender debug messages')
+        parser.add_argument('-dr', '--dryrun', action='store_true', help='Do not export, only list objects that match the other arguments')
+        parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
+        parser.add_argument('-re', '--revisionexport', action='store_true', help='Export changed revisions ')
+        parser.add_argument('-n', '--node', help='Run as headless worker node')
+        parser.add_argument('-cpu', '--sharecpus', help='Select number of logical cores for node')
+        parser.add_argument('-un', '--usenodes', help='Use network nodes for distributed processing')
+        parser.add_argument('-dn', '--detectnodes', help='Detect worker nodes in the network')
+        parser.add_argument('-l', '--logfile', help='Logfile name')
+        parser.add_argument('-ll', '--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'], default='info')
+        all_arguments, ignored = parser.parse_known_args()
+
+        # Update path globals
+        if args.blenderpath is not None:
+            sxglobals.blender_path = os.path.abspath(args.blenderpath)
+        if args.open is not None:
+            sxglobals.catalogue_path = os.path.abspath(args.open)
+            sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
+        else:
+            if sxglobals.catalogue_path is None:
+                logging.error('No Catalogue specified')
+        if args.sxtools is not None:
+            sxglobals.sxtools_path = os.path.abspath(args.sxtools)
+        if args.exportpath is not None:
+            sxglobals.export_path = os.path.abspath(args.exportpath)
+        else:
+            if sxglobals.export_path is None:
+                logging.error('Export collection path not specified')
+        # TODO: Validate paths!
+
+        # Update overrides
+        if args.subdivision is not None:
+            sxglobals.subdivision = True
+            sxglobals.subdivision_count = int(args.subdivision)
+        if args.palette is not None:
+            sxglobals.palette = str(args.palette)
+        if args.staticvertexcolors:
+            sxglobals.staticvertexcolors = args.staticvertexcolors
+
+        # Update batch processing options
+        if args.revisionexport:
+            sxglobals.revision_export = True
+        if args.sharecpus is not None:
+            sxglobals.share_cpus = True
+            sxglobals.shared_cores = int(args.sharecpus)
+        if args.usenodes:
+            sxglobals.use_network_nodes = True
+        if args.dryrun:
+            listonly = args.dryrun
+
+        return all_arguments
+
+
     def payload(self):
         return {
             "magic": sxglobals.magic,
@@ -1553,10 +1620,7 @@ batch_local = SXBATCHER_batch_local()
 gui = SXBATCHER_gui()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--logfile', help='Logfile name')
-    parser.add_argument('--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'], default='info')
-    args = parser.parse_args()
+    args = init.get_args()
     gui.debug_var.set(args.loglevel.capitalize())
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),
@@ -1577,15 +1641,27 @@ if __name__ == '__main__':
     file_receiving_thread.daemon = True
     file_receiving_thread.start()
 
-    gui.mainloop()
-
-    # Main loop for headless operation
-    if False:
+    # Main loop selector
+    if args.updaterepo:
+        pass
+    if args.node:
         while not exit_handler.kill_now:
-            if not sxglobals.exporting:
-                if check_tasks():
-                    start_export()
-                else:
-                    sleep(0.01)
+            if not sxglobals.node_busy_status:
+                sleep(0.1)
+            else:
+                sleep(3.0)
+    elif args.all:
+        sxglobals.export_objs = manager.get_catalogue_objs()
+        manager.task_handler()
+    elif args.category is not None:
+        sxglobals.export_objs = manager.get_category_objs(str(args.category))
+        manager.task_handler()
+    elif args.tag is not None:
+        sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
+        manager.task_handler()
+    elif args.filename is not None:
+        filename = str(args.filename)
+    else:
+        gui.mainloop()
 
-    logging.info('SX Batcher: Exiting gracefully')
+    logging.info('SX Batcher: Exited gracefully')

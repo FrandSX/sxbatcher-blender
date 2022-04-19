@@ -549,16 +549,23 @@ class SXBATCHER_batch_manager(object):
                     "palette_name": sxglobals.palette_name,
                     "static_vertex_colors": str(sxglobals.static_vertex_colors),
                     "debug": str(sxglobals.debug),
-                    "batch_size": str(len(source_assets))
+                    "batch_size": str(len(source_assets)),
+                    "cost": asset[1]
                 })
 
-            for node in sxglobals.nodes:
+            print('source assets:', len(tasks))
+
+            # Sort nodes by performance rating
+            nodes = sxglobals.nodes[:]
+            nodes.sort(key=lambda x: x[6])
+
+            for node in nodes:
                 node_ip = node[0]
                 node_tasks[node_ip] = []
 
             # if any node has failed the benchmark, fall back to method 2
             method = 3
-            for node in sxglobals.nodes:
+            for node in nodes:
                 if node[6] == '0':
                     method = 2
 
@@ -566,79 +573,70 @@ class SXBATCHER_batch_manager(object):
                 # Naive method: Divide tasks per node according to core counts
                 workload = len(tasks)
                 while workload > 0:
-                    for node in sxglobals.nodes:
+                    for node in nodes:
                         node_ip = node[0]
                         cores = int(node[3])
-                        task_list = []
                         for i in range(cores):
                             if workload > i:
-                                task_list.append(tasks[len(tasks) - workload])
+                                node_tasks[node_ip].append(tasks[len(tasks) - workload])
                                 workload -= 1
-                        node_tasks[node_ip].extend(task_list)
 
             elif method == 2:
                 # Cost based method: Divide tasks per node
                 total_cores = 0
-                for node in sxglobals.nodes:
+                for node in nodes:
                     total_cores += int(node[3])
 
                 total_cost = 0
                 for asset in source_assets:
                     total_cost += asset[1]
+                print('total cost:', total_cost)
 
-                # Allocate (and adjust) work share bias
+                # Allocate work share
                 start = 0
-                for node in sxglobals.nodes:
+                for node in nodes:
                     node_ip = node[0]
                     num_cores = int(node[3])
-                    task_list = []
-                    bias = 0
-                    cost_share = total_cost * ((float(num_cores) + bias) / (float(total_cores) + (len(sxglobals.nodes) * bias)))
+                    cost_share = total_cost * (float(num_cores) / float(total_cores))
+                    print('Cost share:', node_ip, cost_share)
 
                     for i in range(start, len(tasks)):
                         if cost_share > 0:
-                            task_list.append(tasks[i])
-                            cost_share -= source_assets[i][1]
+                            node_tasks[node_ip].append(tasks[i])
+                            cost_share -= tasks[i]['cost']
                             start += 1
-
-                    node_tasks[node_ip] = task_list
 
             elif method == 3:
                 # Cost-and-bias based method: Divide tasks per node
                 perfs = []
-                for node in sxglobals.nodes:
+                for node in nodes:
                     perfs.append(float(node[6]))
-                max_perf = max(perfs)
+                best_perf = min(perfs)
 
                 bias_cores = []
-                for node in sxglobals.nodes:
-                    bias_cores.append(int((float(node[6]) / max_perf) * float(node[3])))
-
-                total_cores = 0
-                for cores in bias_cores:
-                    total_cores += cores
-
+                for node in nodes:
+                    bias_cores.append(round(float(node[3]) * best_perf / float(node[6])))
+                    
+                total_cores = sum(bias_cores)
                 total_cost = 0
                 for asset in source_assets:
                     total_cost += asset[1]
 
-                # Allocate (and adjust) work share bias
+                cost_shares = []
+                for num_cores in bias_cores:
+                    cost_shares.append(total_cost * float(num_cores) / float(total_cores))
+
+                # Allocate work share
                 start = 0
-                for i, node in enumerate(sxglobals.nodes):
+                for i, node in enumerate(nodes):
                     node_ip = node[0]
-                    num_cores = bias_cores[i]
-                    task_list = []
-                    bias = 0
-                    cost_share = total_cost * float(num_cores) / float(total_cores)
+                    print('Cost share:', node_ip, cost_shares[i])
 
-                    for i in range(start, len(tasks)):
-                        if cost_share > 0:
-                            task_list.append(tasks[i])
-                            cost_share -= source_assets[i][1]
+                    for j in range(start, len(tasks)):
+                        if cost_shares[i] > 0:
+                            node_tasks[node_ip].append(tasks[j])
+                            cost_shares[i] -= tasks[j]['cost']
                             start += 1
-
-                    node_tasks[node_ip] = task_list
-
 
         # remove empty task lists
         empty_nodes = []

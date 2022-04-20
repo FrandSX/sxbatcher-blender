@@ -164,9 +164,6 @@ class SXBATCHER_init(object):
 
 
     def update_globals(self, args):
-        if args.nogui or args.node:
-            sxglobals.headless = True
-
         # Update path globals
         if args.blenderpath is not None:
             sxglobals.blender_path = os.path.abspath(args.blenderpath)
@@ -210,6 +207,20 @@ class SXBATCHER_init(object):
             sxglobals.use_network_nodes = True
         if args.dryrun:
             listonly = args.dryrun
+
+        # Populate export objects
+        if args.all:
+            sxglobals.export_objs = manager.get_catalogue_objs()
+        elif args.category is not None:
+            sxglobals.export_objs = manager.get_category_objs(str(args.category))
+        elif args.tag is not None:
+            sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
+        # elif args.filename is not None:
+        #     filename = str(args.filename)
+
+        # Determine headless or gui
+        if args.nogui or args.node or sxglobals.export_objs is not None:
+            sxglobals.headless = True
 
 
     def payload(self):
@@ -1684,18 +1695,26 @@ if __name__ == '__main__':
     # Main function tree
     if sxglobals.headless:
         if args.node:
+            logging.info('Starting in headless mode')
+            logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
             while not exit_handler.kill_now:
                 time.sleep(1.0)
         else:
-            if args.all:
-                sxglobals.export_objs = manager.get_catalogue_objs()
-            elif args.category is not None:
-                sxglobals.export_objs = manager.get_category_objs(str(args.category))
-            elif args.tag is not None:
-                sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
-            # elif args.filename is not None:
-            #     filename = str(args.filename)
-            manager.task_handler()
+            if sxglobals.export_objs is not None:
+                if sxglobals.use_network_nodes:
+                    logging.info('Discovering network nodes')
+                    time.sleep(10.0)
+                    if len(sxglobals.nodes) > 0:
+                        logging.info('Nodes found:')
+                        for node in sxglobals.nodes:
+                            logging.info(node)
+                        manager.task_handler()
+                    else:
+                        logging.info('No network nodes discovered')
+                else:
+                    manager.task_handler()
+            else:
+                logging.info('Nothing specified for export')
     else:
         global gui
         gui = SXBATCHER_gui()

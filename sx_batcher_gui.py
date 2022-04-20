@@ -1283,7 +1283,8 @@ class SXBATCHER_gui(tk.Tk):
                 cpu_count = multiprocessing.cpu_count()
 
                 if sxglobals.share_cpus and sxglobals.performance_index == 0:
-                    manager.benchmark()
+                    if sxglobals.validate_paths():
+                        manager.benchmark()
 
                 # remove localhost from nodelist if sharing is disabled
                 if not sxglobals.share_cpus:

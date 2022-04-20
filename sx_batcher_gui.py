@@ -135,6 +135,8 @@ class SXBATCHER_init(object):
 
     def get_args(self):
         parser = argparse.ArgumentParser()
+        parser.add_argument('-ng', '--nogui', action='store_true', help='Run in headless mode')
+        parser.add_argument('-nw', '--node', action='store_true', help='Run as headless worker node')
         parser.add_argument('-b', '--blenderpath', help='Blender executable location')
         parser.add_argument('-o', '--open', help='Open a Catalogue file')
         parser.add_argument('-s', '--sxtools', help='SX Tools folder')
@@ -151,7 +153,6 @@ class SXBATCHER_init(object):
         parser.add_argument('-dr', '--dryrun', action='store_true', help='Do not export, only list objects that match the other arguments')
         parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
         parser.add_argument('-re', '--revisionexport', action='store_true', help='Export changed revisions ')
-        parser.add_argument('-n', '--node', help='Run as headless worker node')
         parser.add_argument('-cpu', '--sharecpus', help='Select number of logical cores for node')
         parser.add_argument('-un', '--usenodes', help='Use network nodes for distributed processing')
         parser.add_argument('-dn', '--detectnodes', help='Detect worker nodes in the network')
@@ -163,6 +164,9 @@ class SXBATCHER_init(object):
 
 
     def update_globals(self, args):
+        if args.nogui or args.node:
+            sxglobals.headless = True
+
         # Update path globals
         if args.blenderpath is not None:
             sxglobals.blender_path = os.path.abspath(args.blenderpath)
@@ -1135,6 +1139,7 @@ class SXBATCHER_gui(tk.Tk):
 
     def check_progress(self, t):
         if not t.is_alive():
+            t.join()
             manager.finish_task()
         else:
             self.after(1000, self.check_progress, t)
@@ -1677,33 +1682,24 @@ if __name__ == '__main__':
         pass
 
     # Main function tree
-    if args.node:
-        sxglobals.headless = True
-        while not exit_handler.kill_now:
-            if not sxglobals.node_busy_status:
-                sleep(0.1)
-            else:
-                sleep(3.0)
-    else:
-        if args.all:
-            sxglobals.headless = True
-            sxglobals.export_objs = manager.get_catalogue_objs()
-            manager.task_handler()
-        elif args.category is not None:
-            sxglobals.headless = True
-            sxglobals.export_objs = manager.get_category_objs(str(args.category))
-            manager.task_handler()
-        elif args.tag is not None:
-            sxglobals.headless = True
-            sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
-            manager.task_handler()
-        elif args.filename is not None:
-            sxglobals.headless = True
-            filename = str(args.filename)
+    if sxglobals.headless:
+        if args.node:
+            while not exit_handler.kill_now:
+                time.sleep(1.0)
         else:
-            global gui
-            gui = SXBATCHER_gui()
-            gui.debug_var.set(args.loglevel.capitalize())
-            gui.mainloop()
+            if args.all:
+                sxglobals.export_objs = manager.get_catalogue_objs()
+            elif args.category is not None:
+                sxglobals.export_objs = manager.get_category_objs(str(args.category))
+            elif args.tag is not None:
+                sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
+            # elif args.filename is not None:
+            #     filename = str(args.filename)
+            manager.task_handler()
+    else:
+        global gui
+        gui = SXBATCHER_gui()
+        gui.debug_var.set(args.loglevel.capitalize())
+        gui.mainloop()
 
     logging.info('SX Batcher: Exited gracefully')

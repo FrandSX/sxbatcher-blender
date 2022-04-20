@@ -1647,12 +1647,11 @@ exit_handler = SXBATCHER_exit_handler()
 sxglobals = SXBATCHER_globals()
 manager = SXBATCHER_batch_manager()
 batch_local = SXBATCHER_batch_local()
-gui = SXBATCHER_gui()
 
 if __name__ == '__main__':
     args = init.get_args()
     init.update_globals(args)
-    gui.debug_var.set(args.loglevel.capitalize())
+
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),
         ('format', '%(asctime)s SX Batcher %(levelname)s: %(message)s'),
@@ -1660,6 +1659,7 @@ if __name__ == '__main__':
         ('filename', pathlib.Path(__file__).parent.resolve() / (pathlib.Path(args.logfile).stem + '.log') if args.logfile else None),
         ('level', getattr(logging, args.loglevel.upper()) if args.loglevel else None)
     ) if v })
+
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()
@@ -1672,9 +1672,11 @@ if __name__ == '__main__':
     file_receiving_thread.daemon = True
     file_receiving_thread.start()
 
-    # Main loop selector
+    # Pre-loop tasks
     if args.updaterepo:
         pass
+
+    # Main function tree
     if args.node:
         sxglobals.headless = True
         while not exit_handler.kill_now:
@@ -1699,7 +1701,9 @@ if __name__ == '__main__':
             sxglobals.headless = True
             filename = str(args.filename)
         else:
-            print(args)
+            global gui
+            gui = SXBATCHER_gui()
+            gui.debug_var.set(args.loglevel.capitalize())
             gui.mainloop()
 
     logging.info('SX Batcher: Exited gracefully')

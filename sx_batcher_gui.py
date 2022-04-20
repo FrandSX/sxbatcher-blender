@@ -1198,7 +1198,7 @@ class SXBATCHER_gui(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title = 'SX Batcher'
+        self.title('SX Batcher')
         self.node_cache = []
         self.tabs = None
         self.tab3 = None

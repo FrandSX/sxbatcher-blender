@@ -40,6 +40,7 @@ class SXBATCHER_globals(object):
 
         self.then = None
         self.now = None
+        self.remote_task = False
 
         # Remote call to update Plastic repo
         self.update_repo = False
@@ -501,6 +502,7 @@ class SXBATCHER_batch_manager(object):
             False
             )
         try:
+            os.makedirs(os.path.realpath('batch_results'), exist_ok=True)
             then = time.perf_counter()
             t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
             t.start()
@@ -1015,7 +1017,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
                                 logging.info(f'Node {sxglobals.ip_addr}: Processing {len(sxglobals.remote_assignment)} remotely assigned source files')
                                 if sxglobals.headless:
-                                    manager.task_handler(remote_task=True)
+                                    sxglobals.remote_task = True
                                 else:
                                     gui.remote_task_bool.set(True)
                 except (OSError, TimeoutError) as error:
@@ -1705,6 +1707,9 @@ if __name__ == '__main__':
             sxglobals.share_cpus = True
             sxglobals.shared_cores = multiprocessing.cpu_count()
             while not exit_handler.kill_now:
+                if sxglobals.remote_task:
+                    manager.task_handler(remote_task=True)
+                    sxglobals.remote_task = False
                 time.sleep(1.0)
         else:
             if sxglobals.export_objs is not None:

@@ -1014,7 +1014,10 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             sxglobals.remote_assignment.append(task)
                             if len(sxglobals.remote_assignment) == int(task['batch_size']):
                                 logging.info(f'Node {sxglobals.ip_addr}: Processing {len(sxglobals.remote_assignment)} remotely assigned source files')
-                                gui.remote_task_bool.set(True)
+                                if sxglobals.headless:
+                                    manager.task_handler(remote_task=True)
+                                else:
+                                    gui.remote_task_bool.set(True)
                 except (OSError, TimeoutError) as error:
                     logging.debug(f'Node {sxglobals.ip_addr} {error}')
             else:

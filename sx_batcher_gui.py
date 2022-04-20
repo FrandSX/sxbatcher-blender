@@ -1666,7 +1666,6 @@ batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
     args = init.get_args()
-    init.update_globals(args)
 
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),
@@ -1688,7 +1687,8 @@ if __name__ == '__main__':
     file_receiving_thread.daemon = True
     file_receiving_thread.start()
 
-    # Pre-loop tasks
+    # Pre-loop tasks and file batches
+    init.update_globals(args)
     if args.updaterepo:
         pass
 

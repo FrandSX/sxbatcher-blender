@@ -154,7 +154,7 @@ class SXBATCHER_init(object):
         parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
         parser.add_argument('-re', '--revisionexport', action='store_true', help='Export changed revisions ')
         parser.add_argument('-cpu', '--sharecpus', help='Select number of logical cores for node')
-        parser.add_argument('-un', '--usenodes', help='Use network nodes for distributed processing')
+        parser.add_argument('-un', '--usenodes', action='store_true', help='Use network nodes for distributed processing')
         parser.add_argument('-dn', '--detectnodes', help='Detect worker nodes in the network')
         parser.add_argument('-l', '--logfile', help='Logfile name')
         parser.add_argument('-ll', '--loglevel', type=str.lower, help="Standard loglevels", choices=['debug', 'info', 'warning', 'error', 'critical'], default='info')
@@ -692,7 +692,8 @@ class SXBATCHER_batch_manager(object):
             # if any node has failed the benchmark, fall back to method 2
             method = 3
             for node in nodes:
-                if node[6] == '0':
+                if not node[6] or float(node[6]) == 0:
+                    logging.debug(f'Fallback method 2')
                     method = 2
 
             if method == 1:

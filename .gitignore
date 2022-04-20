@@ -9,3 +9,5 @@ sx_export_log_graylocal.txt
 sx_export_log_solidlocal.txt
 .vscode/settings.json
 *.log
+batch_results/
+batch_submissions/

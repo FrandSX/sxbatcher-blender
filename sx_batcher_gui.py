@@ -135,10 +135,10 @@ class SXBATCHER_init(object):
 
     def get_args(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument('-b', '--blenderpath', default=sxglobals.blender_path, help='Blender executable location')
-        parser.add_argument('-o', '--open', default=sxglobals.catalogue_path, help='Open a Catalogue file')
-        parser.add_argument('-s', '--sxtools', default=sxglobals.sxtools_path, help='SX Tools folder')
-        parser.add_argument('-e', '--exportpath', default=sxglobals.export_path, help='Export path')
+        parser.add_argument('-b', '--blenderpath', help='Blender executable location')
+        parser.add_argument('-o', '--open', help='Open a Catalogue file')
+        parser.add_argument('-s', '--sxtools', help='SX Tools folder')
+        parser.add_argument('-e', '--exportpath', help='Export path')
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
         parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
         parser.add_argument('-f', '--filename', help='Export an object by filename')
@@ -166,14 +166,20 @@ class SXBATCHER_init(object):
         # Update path globals
         if args.blenderpath is not None:
             sxglobals.blender_path = os.path.abspath(args.blenderpath)
+        else:
+            if sxglobals.blender_path is None:
+                logging.error('Blender path not specified')
         if args.open is not None:
             sxglobals.catalogue_path = os.path.abspath(args.open)
             sxglobals.asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
         else:
             if sxglobals.catalogue_path is None:
-                logging.error('No Catalogue specified')
+                logging.error('Catalogue path not specified')
         if args.sxtools is not None:
             sxglobals.sxtools_path = os.path.abspath(args.sxtools)
+        else:
+            if sxglobals.sxtools_path is None:
+                logging.error('SX Tools path not specified')
         if args.exportpath is not None:
             sxglobals.export_path = os.path.abspath(args.exportpath)
         else:
@@ -1693,6 +1699,7 @@ if __name__ == '__main__':
             sxglobals.headless = True
             filename = str(args.filename)
         else:
+            print(args)
             gui.mainloop()
 
     logging.info('SX Batcher: Exited gracefully')

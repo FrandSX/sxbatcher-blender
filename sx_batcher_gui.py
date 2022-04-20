@@ -370,7 +370,7 @@ class SXBATCHER_batch_manager(object):
     def remove_inactive_nodes(self):
         nodes = []
         for node in sxglobals.nodes:
-            if int(time.time()) - node[5] < 10:
+            if int(time.time()) - node[5] < 15:
                 nodes.append(node)
         sxglobals.nodes = nodes[:]
 
@@ -1699,6 +1699,8 @@ if __name__ == '__main__':
         if args.node:
             logging.info('Starting in headless mode')
             logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
+            sxglobals.share_cpus = True
+            sxglobals.shared_cores = multiprocessing.cpu_count()
             while not exit_handler.kill_now:
                 time.sleep(1.0)
         else:

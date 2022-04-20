@@ -520,65 +520,62 @@ class SXBATCHER_batch_manager(object):
     # 2) Distributed batch processing assigned via GUI
     # 3) Work batches assigned by a remote node
     def task_handler(self, remote_task=False):
+        def process_batch(tasks, num_cores):
+            if sxglobals.headless:
+                batch_local.worker_spawner(tasks, num_cores)
+                self.finish_task()
+            else:
+                t = threading.Thread(target=batch_local.worker_spawner, args=(tasks, num_cores))
+                t.start()
+                gui.check_progress(t)
+
+
         sxglobals.node_busy_status = True
         sxglobals.then = time.perf_counter()
 
         if remote_task:
             # Receive files to be processed from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
-                remote_tasks = self.prepare_received_tasks()
-                if sxglobals.headless:
-                    batch_local.worker_spawner(remote_tasks, sxglobals.shared_cores)
-                    self.finish_task()
-                else:
-                    t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
-                    t.start()
-                    gui.check_progress(t)
+                process_batch(self.prepare_received_tasks(), sxglobals.shared_cores)
             else:
                 self.finish_task(reset=True)
-        else:
-            if sxglobals.use_network_nodes:
-                # Send files to be processed to network nodes
+
+        elif sxglobals.use_network_nodes:
+            # Send files to be processed to network nodes
+            if len(sxglobals.export_objs) > 0:
                 node_tasks = self.prepare_node_tasks()
-                if len(node_tasks) > 0:
-                    logging.info(f'Node workload distribution { {node:len(tasks) for node,tasks in node_tasks.items()} }')
-                    # Track tasked nodes, check completions in file_listener_thread
-                    sxglobals.tasked_nodes = list(node_tasks.keys())
-                    for node_ip, task_list in node_tasks.items():
-                        # Submit files to node
-                        source_files = []
-                        for task in task_list:
-                            file_path = task['asset']
-                            file_path.replace('//', os.path.sep)
-                            source_path = pathlib.Path(os.path.join(sxglobals.asset_path, file_path))
-                            source_files.append(source_path)
+                logging.info(f'Node workload distribution { {node: len(tasks) for node, tasks in node_tasks.items()} }')
+                # Track tasked nodes, check completions in file_listener_thread
+                sxglobals.tasked_nodes = list(node_tasks.keys())
+                for node_ip, task_list in node_tasks.items():
+                    # Submit files to node
+                    source_files = []
+                    for task in task_list:
+                        file_path = task['asset']
+                        file_path.replace('//', os.path.sep)
+                        source_path = pathlib.Path(os.path.join(sxglobals.asset_path, file_path))
+                        source_files.append(source_path)
 
-                        payload = []
-                        for task in task_list:
-                            task['asset'] = os.path.basename(task['asset'])
-                            task['batch_size'] = str(len(task_list))
-                            payload.append(task)
+                    payload = []
+                    for task in task_list:
+                        task['asset'] = os.path.basename(task['asset'])
+                        task['batch_size'] = str(len(task_list))
+                        payload.append(task)
 
-                        if len(source_files) > 0:
-                            if init.transfer_files((node_ip, sxglobals.file_transfer_port), (payload, source_files)):
-                                logging.info(f'{len(source_files)} source files transferred to Node {node_ip}')
-                            else:
-                                self.finish_task(reset=True)
-                else:
-                    self.finish_task(reset=True)
+                    if len(source_files) > 0:
+                        if init.transfer_files((node_ip, sxglobals.file_transfer_port), (payload, source_files)):
+                            logging.info(f'{len(source_files)} source files transferred to Node {node_ip}')
+                        else:
+                            self.finish_task(reset=True)
             else:
-                # Receive export list created in the UI
-                local_tasks = self.prepare_local_tasks()
-                if len(local_tasks) > 0:
-                    if sxglobals.headless:
-                        batch_local.worker_spawner(local_tasks, multiprocessing.cpu_count())
-                        self.finish_task()
-                    else:
-                        t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
-                        t.start()
-                        gui.check_progress(t)
-                else:
-                    self.finish_task(reset=True)
+                self.finish_task(reset=True)
+
+        else:
+            # Receive export list created in the UI
+            if len(sxglobals.export_objs) > 0:
+                process_batch(self.prepare_local_tasks(), multiprocessing.cpu_count())
+            else:
+                self.finish_task(reset=True)
 
 
     def prepare_local_tasks(self):
@@ -837,14 +834,18 @@ class SXBATCHER_batch_local(object):
     def worker_spawner(self, tasks, num_cores):
         logging.debug(f'Node {sxglobals.ip_addr} spawning workers')
 
-        with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
+        mp = multiprocessing.get_context("spawn")
+        with mp.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
                 progress = round((i + 1) / len(tasks) * 100)
-                logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
+                # logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
                 if not sxglobals.headless:
                     gui.progress_bar['value'] = progress
                 if error is not None:
+                    # logging.error(error)
                     sxglobals.errors.append(error)
+            pool.close()
+            pool.join()
 
         sxglobals.now = time.perf_counter()
         export_count = len(sxglobals.remote_assignment) if len(sxglobals.remote_assignment) > 0 else len(sxglobals.export_objs) 

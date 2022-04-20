@@ -520,8 +520,8 @@ class SXBATCHER_batch_manager(object):
             if sxglobals.use_network_nodes:
                 # Send files to be processed to network nodes
                 node_tasks = self.prepare_node_tasks()
-                logging.info(f'Node workload distribution { {node:len(tasks) for node,tasks in node_tasks.items()} }')
                 if len(node_tasks) > 0:
+                    logging.info(f'Node workload distribution { {node:len(tasks) for node,tasks in node_tasks.items()} }')
                     # Track tasked nodes, check completions in file_listener_thread
                     sxglobals.tasked_nodes = list(node_tasks.keys())
                     for node_ip, task_list in node_tasks.items():

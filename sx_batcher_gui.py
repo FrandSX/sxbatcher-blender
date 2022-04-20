@@ -22,6 +22,9 @@ class SXBATCHER_globals(object):
     def __init__(self):
         conf = init.load_conf()
 
+        # Main mode, selected at launch, not saved in conf
+        self.headless = False
+
         # Main locations, validate if changed
         self.blender_path = conf.get('blender_path', '')
         self.catalogue_path = conf.get('catalogue_path', '')
@@ -343,6 +346,14 @@ class SXBATCHER_batch_manager(object):
         return obj_list
 
 
+    def check_progress_headless(self, t):
+        if not t.is_alive():
+            self.finish_task()
+        else:
+            time.sleep(1.0)
+            self.check_progress_headless(t)
+
+
     def remove_inactive_nodes(self):
         nodes = []
         for node in sxglobals.nodes:
@@ -450,7 +461,8 @@ class SXBATCHER_batch_manager(object):
                 label_string = 'Job completed in '+str(round(sxglobals.now-sxglobals.then, 2))+' seconds'
                 logging.info(f'Node {sxglobals.ip_addr}: {label_string}')
 
-        gui.state_manager('ready', label=label_string)
+        if not sxglobals.headless:
+            gui.state_manager('ready', label=label_string)
         sxglobals.errors = []
         sxglobals.node_busy_status = False
         sxglobals.master_node = None
@@ -499,7 +511,10 @@ class SXBATCHER_batch_manager(object):
                 remote_tasks = self.prepare_received_tasks()
                 t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
                 t.start()
-                gui.check_progress(t)
+                if sxglobals.headless:
+                    manager.check_progress_headless(t)
+                else:
+                    gui.check_progress(t)
             else:
                 self.finish_task(reset=True)
         else:
@@ -538,7 +553,10 @@ class SXBATCHER_batch_manager(object):
                 if len(local_tasks) > 0:
                     t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
                     t.start()
-                    gui.check_progress(t)
+                    if sxglobals.headless:
+                        manager.check_progress_headless(t)
+                    else:
+                        gui.check_progress(t)
                 else:
                     self.finish_task(reset=True)
 
@@ -797,7 +815,11 @@ class SXBATCHER_batch_local(object):
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
-                gui.progress_bar['value'] = round(i/len(tasks)*100)
+                progress = round(i/len(tasks)*100)
+                if sxglobals.headless:
+                    logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
+                else:
+                    gui.progress_bar['value'] = progress
                 if error is not None:
                     sxglobals.errors.append(error)
 
@@ -1648,23 +1670,29 @@ if __name__ == '__main__':
     if args.updaterepo:
         pass
     if args.node:
+        sxglobals.headless = True
         while not exit_handler.kill_now:
             if not sxglobals.node_busy_status:
                 sleep(0.1)
             else:
                 sleep(3.0)
-    elif args.all:
-        sxglobals.export_objs = manager.get_catalogue_objs()
-        manager.task_handler()
-    elif args.category is not None:
-        sxglobals.export_objs = manager.get_category_objs(str(args.category))
-        manager.task_handler()
-    elif args.tag is not None:
-        sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
-        manager.task_handler()
-    elif args.filename is not None:
-        filename = str(args.filename)
     else:
-        gui.mainloop()
+        if args.all:
+            sxglobals.headless = True
+            sxglobals.export_objs = manager.get_catalogue_objs()
+            manager.task_handler()
+        elif args.category is not None:
+            sxglobals.headless = True
+            sxglobals.export_objs = manager.get_category_objs(str(args.category))
+            manager.task_handler()
+        elif args.tag is not None:
+            sxglobals.headless = True
+            sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
+            manager.task_handler()
+        elif args.filename is not None:
+            sxglobals.headless = True
+            filename = str(args.filename)
+        else:
+            gui.mainloop()
 
     logging.info('SX Batcher: Exited gracefully')

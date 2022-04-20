@@ -443,7 +443,10 @@ class SXBATCHER_batch_manager(object):
 
     def finish_task(self, reset=False):
         if reset:
-            label_string = 'No Changes!'
+            if sxglobals.revision_export:
+                label_string = 'No revision changes'
+            else:
+                label_string = 'Could not start batch, check node settings'
         else:
             if sxglobals.master_node is None:
                 self.update_revisions()
@@ -661,10 +664,7 @@ class SXBATCHER_batch_manager(object):
             logging.debug(f'Source asset count: {len(tasks)}')
 
             # Sort nodes by performance rating
-            nodes = []
-            for node in sxglobals.nodes:
-                if int(node[3]) > 0:
-                    nodes.append(node[:])
+            nodes = sxglobals.nodes[:]
             if len(nodes) == 0:
                 return []
 
@@ -913,14 +913,14 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
                     fields = json.loads(received)
 
                     # filter duplicates, maintain existing, update the status of the received node
-                    if fields['magic'] == sxglobals.magic:
+                    if (fields['magic'] == sxglobals.magic) and (int(fields['cores']) > 0):
                         nodes = []
                         for node in sxglobals.nodes:
                             if node[0] != fields['address']:
                                 nodes.append(node)
                         nodes.append((fields['address'], fields['host'], fields['system'], fields['cores'], fields['status'], int(time.time()), fields['performance_index']))
                         nodes.sort(key=lambda x: x[0])
-                        sxglobals.nodes = nodes
+                        sxglobals.nodes = nodes[:]
                     time.sleep(0.05)
                 except (TimeoutError, OSError):
                     logging.debug('No nodes found for 10 seconds')

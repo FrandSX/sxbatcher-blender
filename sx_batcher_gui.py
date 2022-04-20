@@ -352,14 +352,6 @@ class SXBATCHER_batch_manager(object):
         return obj_list
 
 
-    def check_progress_headless(self, t):
-        if not t.is_alive():
-            self.finish_task()
-        else:
-            time.sleep(1.0)
-            self.check_progress_headless(t)
-
-
     def remove_inactive_nodes(self):
         nodes = []
         for node in sxglobals.nodes:
@@ -515,11 +507,12 @@ class SXBATCHER_batch_manager(object):
             # Receive files to be processed from network node
             if sxglobals.share_cpus and (len(sxglobals.remote_assignment) > 0):
                 remote_tasks = self.prepare_received_tasks()
-                t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
-                t.start()
                 if sxglobals.headless:
-                    manager.check_progress_headless(t)
+                    batch_local.worker_spawner(remote_tasks, sxglobals.shared_cores)
+                    self.finish_task()
                 else:
+                    t = threading.Thread(target=batch_local.worker_spawner, args=(remote_tasks, sxglobals.shared_cores))
+                    t.start()
                     gui.check_progress(t)
             else:
                 self.finish_task(reset=True)
@@ -557,11 +550,12 @@ class SXBATCHER_batch_manager(object):
                 # Receive export list created in the UI
                 local_tasks = self.prepare_local_tasks()
                 if len(local_tasks) > 0:
-                    t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
-                    t.start()
                     if sxglobals.headless:
-                        manager.check_progress_headless(t)
+                        batch_local.worker_spawner(local_tasks, multiprocessing.cpu_count())
+                        self.finish_task()
                     else:
+                        t = threading.Thread(target=batch_local.worker_spawner, args=(local_tasks, multiprocessing.cpu_count()))
+                        t.start()
                         gui.check_progress(t)
                 else:
                     self.finish_task(reset=True)
@@ -667,7 +661,13 @@ class SXBATCHER_batch_manager(object):
             logging.debug(f'Source asset count: {len(tasks)}')
 
             # Sort nodes by performance rating
-            nodes = sxglobals.nodes[:]
+            nodes = []
+            for node in sxglobals.nodes:
+                if int(node[3]) > 0:
+                    nodes.append(node[:])
+            if len(nodes) == 0:
+                return []
+
             nodes.sort(key=lambda x: x[6])
 
             for node in nodes:

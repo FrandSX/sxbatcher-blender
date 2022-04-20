@@ -1,2 +1,16 @@
 {
+    "paletted": {
+        "perf_test.blend": {
+            "tags": [
+                "benchmark",
+                "suzanne",
+                "monkey"
+            ],
+            "objects": [
+                "Suzanne_root"
+            ],
+            "cost": "17012",
+            "revision": "3"
+        }
+    }
 }

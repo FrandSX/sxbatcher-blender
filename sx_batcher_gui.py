@@ -839,10 +839,9 @@ class SXBATCHER_batch_local(object):
 
         with multiprocessing.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             for i, error in enumerate(pool.imap(self.worker_process, tasks)):
-                progress = round(i/len(tasks)*100)
-                if sxglobals.headless:
-                    logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
-                else:
+                progress = round((i + 1) / len(tasks) * 100)
+                logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
+                if not sxglobals.headless:
                     gui.progress_bar['value'] = progress
                 if error is not None:
                     sxglobals.errors.append(error)
@@ -1713,8 +1712,8 @@ if __name__ == '__main__':
 
             while not exit_handler.kill_now:
                 if sxglobals.remote_task:
-                    manager.task_handler(remote_task=True)
                     sxglobals.remote_task = False
+                    manager.task_handler(remote_task=True)
                 time.sleep(1.0)
         else:
             if sxglobals.export_objs is not None:

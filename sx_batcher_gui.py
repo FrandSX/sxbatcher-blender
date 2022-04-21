@@ -348,10 +348,14 @@ class SXBATCHER_batch_manager(object):
 
     def get_category_objs(self, category):
         obj_list = []
-        category = sxglobals.catalogue[category]
-        for obj_dict in category.values():
-            for obj_name in obj_dict['objects']:
-                obj_list.append(obj_name)
+        if category in sxglobals.catalogue:
+            category = sxglobals.catalogue[category]
+            for obj_dict in category.values():
+                for obj_name in obj_dict['objects']:
+                    obj_list.append(obj_name)
+        else:
+            logging.error('No matching category found.')
+            logging.error(f'Existing categories are: {list(sxglobals.catalogue.keys())}')
         return obj_list
 
 
@@ -1692,6 +1696,7 @@ if __name__ == '__main__':
     # Main function tree
     if sxglobals.headless:
         if args.node:
+            # Started in headless worker node
             logging.info('Starting in headless mode')
             logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
             sxglobals.share_cpus = True
@@ -1707,7 +1712,8 @@ if __name__ == '__main__':
                     manager.task_handler(remote_task=True)
                 time.sleep(1.0)
         else:
-            if sxglobals.export_objs is not None:
+            if (sxglobals.export_objs is not None) and (len(sxglobals.export_objs) > 0):
+                # Started as a master in distributed batch mode
                 if sxglobals.use_network_nodes:
                     logging.info('Discovering network nodes (10 seconds)')
                     time.sleep(10.0)
@@ -1717,7 +1723,7 @@ if __name__ == '__main__':
                             logging.info(node)
                         manager.task_handler()
                         while (len(sxglobals.tasked_nodes) > 0) and not exit_handler.kill_now:
-                            # Master node may also be sharing its own cores
+                            # Master node may also be using its own CPUs as a worker node
                             if sxglobals.remote_task:
                                 sxglobals.remote_task = False
                                 manager.task_handler(remote_task=True)

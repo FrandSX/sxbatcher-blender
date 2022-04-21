@@ -206,7 +206,7 @@ class SXBATCHER_init(object):
             sxglobals.revision_export = False
         if args.sharecpus is not None:
             sxglobals.share_cpus = True
-            sxglobals.shared_cores = int(args.sharecpus)
+            sxglobals.shared_cores = max(0, min(int(args.sharecpus), multiprocessing.cpu_count()))
         else:
             sxglobals.share_cpus = False
         if args.usenodes:
@@ -1689,6 +1689,14 @@ if __name__ == '__main__':
         ('level', getattr(logging, args.loglevel.upper()) if args.loglevel else None)
     ) if v })
 
+    # Pre-loop tasks and file batches
+    if len(sys.argv) == 1:
+        sxglobals.headless = False
+    else:
+        init.update_globals(args)
+        if args.updaterepo:
+            pass
+
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True
     broadcast_thread.start()
@@ -1700,14 +1708,6 @@ if __name__ == '__main__':
     file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
     file_receiving_thread.daemon = True
     file_receiving_thread.start()
-
-    # Pre-loop tasks and file batches
-    if len(sys.argv) == 1:
-        sxglobals.headless = False
-    else:
-        init.update_globals(args)
-        if args.updaterepo:
-            pass
 
     # Main function tree
     if sxglobals.headless:
@@ -1736,8 +1736,8 @@ if __name__ == '__main__':
                         for node in sxglobals.nodes:
                             logging.info(node)
                         manager.task_handler()
-                        while len(sxglobals.tasked_nodes) > 0:
-                            # Master node may send itself a batch of work
+                        while (len(sxglobals.tasked_nodes) > 0) and not exit_handler.kill_now:
+                            # Master node may also be sharing its own cores
                             if sxglobals.remote_task:
                                 sxglobals.remote_task = False
                                 manager.task_handler(remote_task=True)

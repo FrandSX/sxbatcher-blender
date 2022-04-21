@@ -43,9 +43,6 @@ class SXBATCHER_globals(object):
         self.now = None
         self.remote_task = False
 
-        # Remote call to update Plastic repo
-        self.update_repo = False
-
         # Batch lists
         self.export_objs = None
         self.source_files = None
@@ -145,15 +142,12 @@ class SXBATCHER_init(object):
         parser.add_argument('-e', '--exportpath', help='Export path')
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
         parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
-        parser.add_argument('-f', '--filename', help='Export an object by filename')
         parser.add_argument('-t', '--tag', help='Export all tagged objects')
         parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
         parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
         parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
         parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')
         parser.add_argument('-v', '--verbose', action='store_true', help='Display Blender debug messages')
-        parser.add_argument('-dr', '--dryrun', action='store_true', help='Do not export, only list objects that match the other arguments')
-        parser.add_argument('-u', '--updaterepo', action='store_true', help='Update art asset repository to the latest version (PlasticSCM)')
         parser.add_argument('-re', '--revisionexport', action='store_true', help='Export changed revisions ')
         parser.add_argument('-cpu', '--sharecpus', help='Select number of logical cores for node')
         parser.add_argument('-un', '--usenodes', action='store_true', help='Use network nodes for distributed processing')
@@ -213,8 +207,6 @@ class SXBATCHER_init(object):
             sxglobals.use_network_nodes = True
         else:
             sxglobals.use_network_nodes = False
-        if args.dryrun:
-            listonly = args.dryrun
 
         # Populate export objects
         if args.all:
@@ -223,8 +215,6 @@ class SXBATCHER_init(object):
             sxglobals.export_objs = manager.get_category_objs(str(args.category))
         elif args.tag is not None:
             sxglobals.export_objs = manager.get_tagged_objs([str(args.tag), ])
-        # elif args.filename is not None:
-        #     filename = str(args.filename)
 
         # Determine headless or gui
         if args.nogui or args.node or sxglobals.export_objs is not None:
@@ -1117,14 +1107,6 @@ class SXBATCHER_gui(tk.Tk):
         self.state_manager()
 
 
-    def handle_click_update_plastic(self, event):
-        if os.name == 'nt':
-            subprocess.call(['C:\Program Files\PlasticSCM5\client\cm.exe', 'update', sxglobals.asset_path])
-        else:
-            subprocess.call(['/usr/local/bin/cm', 'update', sxglobals.asset_path])
-        sxglobals.catalogue = init.load_asset_data(sxglobals.catalogue_path)
-
-
     def handle_click_listboxselect(self, event):
         tags = []
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
@@ -1694,8 +1676,6 @@ if __name__ == '__main__':
         sxglobals.headless = False
     else:
         init.update_globals(args)
-        if args.updaterepo:
-            pass
 
     broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
     broadcast_thread.daemon = True

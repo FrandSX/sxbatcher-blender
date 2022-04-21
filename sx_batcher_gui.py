@@ -143,7 +143,6 @@ class SXBATCHER_init(object):
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
         parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
         parser.add_argument('-t', '--tag', help='Export all tagged objects')
-        parser.add_argument('-d', '--folder', help='Ignore the Catalogue, export all objects from a folder')
         parser.add_argument('-sd', '--subdivision', type=str, help='SX Tools subdivision override')
         parser.add_argument('-sp', '--palette', type=str, help='SX Tools palette override')
         parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='SX Tools flatten layers to VertexColor0')

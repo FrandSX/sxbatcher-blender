@@ -10,6 +10,7 @@ import socket
 import pathlib
 import struct
 import os
+import sys
 import platform
 import tkinter as tk
 from tkinter import ttk, filedialog
@@ -71,7 +72,7 @@ class SXBATCHER_globals(object):
         self.magic_result = 'ankdf89d'
         self.master_node = None
         self.buffer_size = 4096
-        self.nodes = conf.get('nodes', [])
+        self.nodes = []
         self.tasked_nodes = []
         self.node_busy_status = False
 
@@ -201,11 +202,17 @@ class SXBATCHER_init(object):
         # Update batch processing options
         if args.revisionexport:
             sxglobals.revision_export = True
+        else:
+            sxglobals.revision_export = False
         if args.sharecpus is not None:
             sxglobals.share_cpus = True
             sxglobals.shared_cores = int(args.sharecpus)
+        else:
+            sxglobals.share_cpus = False
         if args.usenodes:
             sxglobals.use_network_nodes = True
+        else:
+            sxglobals.use_network_nodes = False
         if args.dryrun:
             listonly = args.dryrun
 
@@ -284,8 +291,7 @@ class SXBATCHER_init(object):
             'share_cpus': str(int(sxglobals.share_cpus)),
             'shared_cores': str(int(sxglobals.shared_cores)),
             'use_nodes': str(int(sxglobals.use_network_nodes)),
-            'performance_index': str(sxglobals.performance_index),
-            'nodes': sxglobals.nodes
+            'performance_index': str(sxglobals.performance_index)
         }
 
         self.save_json(conf_path, temp_dict)
@@ -573,6 +579,7 @@ class SXBATCHER_batch_manager(object):
         else:
             # Receive export list created in the UI
             if len(sxglobals.export_objs) > 0:
+                logging.info(f'Processing {len(sxglobals.export_objs)} export objects')
                 process_batch(self.prepare_local_tasks(), multiprocessing.cpu_count())
             else:
                 self.finish_task(reset=True)
@@ -1695,9 +1702,12 @@ if __name__ == '__main__':
     file_receiving_thread.start()
 
     # Pre-loop tasks and file batches
-    init.update_globals(args)
-    if args.updaterepo:
-        pass
+    if len(sys.argv) == 1:
+        sxglobals.headless = False
+    else:
+        init.update_globals(args)
+        if args.updaterepo:
+            pass
 
     # Main function tree
     if sxglobals.headless:
@@ -1719,16 +1729,23 @@ if __name__ == '__main__':
         else:
             if sxglobals.export_objs is not None:
                 if sxglobals.use_network_nodes:
-                    logging.info('Discovering network nodes')
+                    logging.info('Discovering network nodes (10 seconds)')
                     time.sleep(10.0)
                     if len(sxglobals.nodes) > 0:
                         logging.info('Nodes found:')
                         for node in sxglobals.nodes:
                             logging.info(node)
                         manager.task_handler()
+                        while len(sxglobals.tasked_nodes) > 0:
+                            # Master node may send itself a batch of work
+                            if sxglobals.remote_task:
+                                sxglobals.remote_task = False
+                                manager.task_handler(remote_task=True)
+                            time.sleep(1.0)
                     else:
                         logging.info('No network nodes discovered')
                 else:
+                    # Local batch
                     manager.task_handler()
             else:
                 logging.info('Nothing specified for export')

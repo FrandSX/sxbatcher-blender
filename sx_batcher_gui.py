@@ -1735,4 +1735,4 @@ if __name__ == '__main__':
         gui.debug_var.set(args.loglevel.capitalize())
         gui.mainloop()
 
-    logging.info('SX Batcher: Exited gracefully')
+    logging.info('Exited gracefully')

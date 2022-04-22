@@ -867,7 +867,7 @@ class SXBATCHER_batch_local(object):
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
                     for file in for_transfer:
                         os.remove(file)
-                    logging.info(f'{len(for_transfer)} result files transferred to Node {sxglobals.master_node}, removed locally')
+                    logging.info(f'{len(for_transfer)} result files transferred to master node, removed locally')
                 else:
                     logging.critical('Failed to transfer result files')
 

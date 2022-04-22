@@ -314,19 +314,35 @@ class SXBATCHER_init(object):
         payload.insert(0, sizemap)
         bufsize = sxglobals.buffer_size
 
-        try:
-            with socket.create_connection(address, timeout=10) as sock:
-                sock.sendall(json.dumps(payload).encode('utf-8'))
-    
-            with socket.create_connection(address, timeout=60) as sock:
-                for file in files:
-                    with open(file, 'rb') as f:
-                        logging.debug(f'Transferring {file}')
-                        while chunk := f.read(bufsize):
-                            sock.send(chunk)
-            return True
-        except (ConnectionResetError, TimeoutError):
-            return False
+        then = time.time()
+        completed = False
+        while (time.time() - then < 90) and not completed:
+            x = False
+            while not x:
+                try:
+                    with socket.create_connection(address, timeout=10) as sock:
+                        sock.sendall(json.dumps(payload).encode('utf-8'))
+                    x = True
+                except (ConnectionResetError, TimeoutError):
+                    time.sleep(0.1)
+                    logging.error(f'Node {sxglobals.ip_addr} retrying task data transfer')
+
+            y = False
+            while not y:
+                try:
+                    with socket.create_connection(address, timeout=60) as sock:
+                        for file in files:
+                            with open(file, 'rb') as f:
+                                logging.debug(f'Transferring {file}')
+                                while chunk := f.read(bufsize):
+                                    sock.send(chunk)
+                    y = True
+                except (ConnectionResetError, TimeoutError):
+                    time.sleep(0.1)
+                    logging.error(f'Node {sxglobals.ip_addr} retrying file transfer')
+
+            completed = True
+        return completed
 
 
 # ------------------------------------------------------------------------

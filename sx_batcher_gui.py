@@ -86,6 +86,7 @@ class SXBATCHER_globals(object):
 
         return None
 
+
     def validate_paths(self):
         if self.blender_path != '':
             self.blender_path = self.blender_path.replace('//', os.path.sep) if os.path.isfile(self.blender_path.replace('//', os.path.sep)) else ''
@@ -180,7 +181,6 @@ class SXBATCHER_init(object):
         else:
             if sxglobals.export_path is None:
                 logging.error('Export collection path not specified')
-        # TODO: Validate paths!
 
         # Update overrides
         if args.subdivision is not None:
@@ -1679,64 +1679,68 @@ if __name__ == '__main__':
     else:
         init.update_globals(args)
 
-    broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
-    broadcast_thread.daemon = True
-    broadcast_thread.start()
-
-    discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
-    discovery_thread.daemon = True
-    discovery_thread.start()
-
-    file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
-    file_receiving_thread.daemon = True
-    file_receiving_thread.start()
-
-    # Main function tree
-    if sxglobals.headless:
-        if args.node:
-            # Started in headless worker node
-            logging.info('Starting in headless mode')
-            logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
-            sxglobals.share_cpus = True
-            sxglobals.shared_cores = multiprocessing.cpu_count()
-
-            if sxglobals.performance_index == 0:
-                if sxglobals.validate_paths():
-                    manager.benchmark()
-
-            while not exit_handler.kill_now:
-                if sxglobals.remote_task:
-                    sxglobals.remote_task = False
-                    manager.task_handler(remote_task=True)
-                time.sleep(1.0)
-        else:
-            if (sxglobals.export_objs is not None) and (len(sxglobals.export_objs) > 0):
-                # Started as a master in distributed batch mode
-                if sxglobals.use_network_nodes:
-                    logging.info('Discovering network nodes (10 seconds)')
-                    time.sleep(10.0)
-                    if len(sxglobals.nodes) > 0:
-                        logging.info('Nodes found:')
-                        for node in sxglobals.nodes:
-                            logging.info(node)
-                        manager.task_handler()
-                        while (len(sxglobals.tasked_nodes) > 0) and not exit_handler.kill_now:
-                            # Master node may also be using its own CPUs as a worker node
-                            if sxglobals.remote_task:
-                                sxglobals.remote_task = False
-                                manager.task_handler(remote_task=True)
-                            time.sleep(1.0)
-                    else:
-                        logging.info('No network nodes discovered')
-                else:
-                    # Local batch
-                    manager.task_handler()
-            else:
-                logging.info('Nothing specified for export')
+    # Do not enter main function tree unless paths in args are valid
+    if not sxglobals.validate_paths():
+        logging.critical('Invalid path arguments detected')
     else:
-        global gui
-        gui = SXBATCHER_gui()
-        gui.debug_var.set(args.loglevel.capitalize())
-        gui.mainloop()
+        broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
+        broadcast_thread.daemon = True
+        broadcast_thread.start()
+
+        discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
+        discovery_thread.daemon = True
+        discovery_thread.start()
+
+        file_receiving_thread = SXBATCHER_node_file_listener_thread(sxglobals.ip_addr, sxglobals.file_transfer_port)
+        file_receiving_thread.daemon = True
+        file_receiving_thread.start()
+
+        # Main function tree
+        if sxglobals.headless:
+            if args.node:
+                # Started in headless worker node
+                logging.info('Starting in headless mode')
+                logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
+                sxglobals.share_cpus = True
+                sxglobals.shared_cores = multiprocessing.cpu_count()
+
+                if sxglobals.performance_index == 0:
+                    if sxglobals.validate_paths():
+                        manager.benchmark()
+
+                while not exit_handler.kill_now:
+                    if sxglobals.remote_task:
+                        sxglobals.remote_task = False
+                        manager.task_handler(remote_task=True)
+                    time.sleep(1.0)
+            else:
+                if (sxglobals.export_objs is not None) and (len(sxglobals.export_objs) > 0):
+                    # Started as a master in distributed batch mode
+                    if sxglobals.use_network_nodes:
+                        logging.info('Discovering network nodes (10 seconds)')
+                        time.sleep(10.0)
+                        if len(sxglobals.nodes) > 0:
+                            logging.info('Nodes found:')
+                            for node in sxglobals.nodes:
+                                logging.info(node)
+                            manager.task_handler()
+                            while (len(sxglobals.tasked_nodes) > 0) and not exit_handler.kill_now:
+                                # Master node may also be using its own CPUs as a worker node
+                                if sxglobals.remote_task:
+                                    sxglobals.remote_task = False
+                                    manager.task_handler(remote_task=True)
+                                time.sleep(1.0)
+                        else:
+                            logging.info('No network nodes discovered')
+                    else:
+                        # Local batch
+                        manager.task_handler()
+                else:
+                    logging.info('Nothing specified for export')
+        else:
+            global gui
+            gui = SXBATCHER_gui()
+            gui.debug_var.set(args.loglevel.capitalize())
+            gui.mainloop()
 
     logging.info('Exited gracefully')

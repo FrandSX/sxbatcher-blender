@@ -965,6 +965,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                 try:
                     self.sock.listen()
                     conn, addr = self.sock.accept()
+                    current_client = addr[:]
                     logging.debug(f'Got connection {addr}')
                     os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
@@ -983,7 +984,16 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                     transfer_data = [(pathlib.Path(file_and_size[0]).name, int(file_and_size[1])) for file_and_size in file_meta]
 
                     # 2 - receive files
-                    conn, addr = self.sock.accept()
+                    new_client = 'x'
+                    conn = None
+                    addr = None
+                    while current_client[0] != new_client[0]:
+                        conn, addr = self.sock.accept()
+                        new_client = addr[:]
+                        if new_client[0] != current_client[0]:
+                            logging.error('Denying connection from wrong client')
+                            conn.close()
+
                     for i, (file, size) in enumerate(transfer_data):
                         if task_data[i]['magic'] == sxglobals.magic_task:
                             target_dir = os.path.realpath('batch_submissions')

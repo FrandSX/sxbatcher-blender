@@ -326,7 +326,7 @@ class SXBATCHER_init(object):
                 except (ConnectionResetError, TimeoutError):
                     time.sleep(0.1)
                     logging.error(f'Node {sxglobals.ip_addr} retrying task data transfer')
-
+            time.sleep(0.1)
             y = False
             while not y:
                 try:
@@ -982,7 +982,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                     self.sock.listen()
                     conn, addr = self.sock.accept()
                     current_client = addr[:]
-                    logging.debug(f'Got connection {addr}')
+                    logging.info(f'Got connection {addr}')
                     os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
                     # 1 - receive task data

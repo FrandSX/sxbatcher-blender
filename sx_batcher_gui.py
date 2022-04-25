@@ -992,6 +992,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                         if not chunk:
                             break
                         b.extend(chunk)
+                        time.sleep(0.01)
                     task_data = json.loads(b.decode('utf-8'))
                     logging.debug(f'Node {sxglobals.ip_addr}: Task data received')
                     conn.close()

@@ -1706,7 +1706,7 @@ if __name__ == '__main__':
         init.update_globals(args)
 
     # Do not enter main function tree unless paths in args are valid
-    if not sxglobals.validate_paths():
+    if not sxglobals.validate_paths() and sxglobals.headless:
         logging.critical('Invalid path arguments detected')
     else:
         broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)

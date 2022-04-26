@@ -322,7 +322,7 @@ class SXBATCHER_init(object):
                 try:
                     with socket.create_connection(address, timeout=10) as sock:
                         sock.sendall(json.dumps(payload).encode('utf-8'))
-                        sock.shutdown()
+                        sock.shutdown(socket.SHUT_RDWR)
                         sock.close()
                     x = True
                 except (ConnectionResetError, TimeoutError):

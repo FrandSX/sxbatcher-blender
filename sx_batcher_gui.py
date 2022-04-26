@@ -310,7 +310,7 @@ class SXBATCHER_init(object):
     def reset_batch_folders(self):
         folders = ['batch_results', 'batch_submissions']
         for folder in folders:
-            folder = os.path.join(os.path.dirname(__file__), folder)
+            folder = str(os.path.join(os.path.dirname(__file__), folder))
             if os.path.exists(folder):
                 shutil.rmtree(folder)
             os.makedirs(folder, exist_ok=True)

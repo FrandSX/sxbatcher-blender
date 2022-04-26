@@ -322,6 +322,8 @@ class SXBATCHER_init(object):
                 try:
                     with socket.create_connection(address, timeout=10) as sock:
                         sock.sendall(json.dumps(payload).encode('utf-8'))
+                        sock.shutdown()
+                        sock.close()
                     x = True
                 except (ConnectionResetError, TimeoutError):
                     time.sleep(0.1)
@@ -336,6 +338,8 @@ class SXBATCHER_init(object):
                                 logging.debug(f'Transferring {file}')
                                 while chunk := f.read(bufsize):
                                     sock.send(chunk)
+                                sock.shutdown()
+                                sock.close()
                     y = True
                 except (ConnectionResetError, TimeoutError):
                     time.sleep(0.1)

@@ -514,7 +514,7 @@ class SXBATCHER_batch_manager(object):
             str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
             str(os.path.realpath('batch_results')),
             os.path.abspath(sxglobals.sxtools_path),
-            None,
+            '3',
             None,
             False,
             False
@@ -985,7 +985,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                     self.sock.listen()
                     conn, addr = self.sock.accept()
                     current_client = addr[:]
-                    logging.info(f'Got connection {addr}')
+                    logging.debug(f'Got connection {addr}')
 
                     # 1 - receive task data
                     b = bytearray()

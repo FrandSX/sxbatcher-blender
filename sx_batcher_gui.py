@@ -9,6 +9,7 @@ import json
 import socket
 import pathlib
 import struct
+import shutil
 import os
 import sys
 import platform
@@ -306,6 +307,16 @@ class SXBATCHER_init(object):
             return revision_dict
 
 
+    def reset_batch_folders(self):
+        folders = ['batch_results', 'batch_submissions']
+        for folder in folders:
+            folder = os.path.join(os.path.realpath(__file__), folder)
+            if os.path.exists(folder):
+                shutil.rmtree(folder)
+            os.makedirs(folder, exist_ok=True)
+        logging.info('Batch folders reset')
+
+
     # files are path objects, address is a tuple of IP address and port
     def transfer_files(self, address, out_files):
         payload = out_files[0]
@@ -338,8 +349,8 @@ class SXBATCHER_init(object):
                                 logging.debug(f'Transferring {file}')
                                 while chunk := f.read(bufsize):
                                     sock.send(chunk)
-                        sock.shutdown(socket.SHUT_RDWR)
-                        sock.close()
+                                sock.shutdown(socket.SHUT_RDWR)
+                                sock.close()
                     y = True
                 except (ConnectionResetError, TimeoutError):
                     time.sleep(0.1)
@@ -464,17 +475,6 @@ class SXBATCHER_batch_manager(object):
         init.save_json(revision_path, file_dict)
 
 
-    def delete_submissions(self):
-        deleted = False
-        with os.scandir(os.path.realpath('batch_submissions')) as submissions:
-            for file in submissions:
-                if file.name.endswith('.blend') and file.is_file():
-                    deleted = True
-                    os.remove(file)
-        if deleted:
-            logging.debug('Cleaned batch_submissions folder')
-
-
     def finish_task(self, reset=False):
         if reset:
             if sxglobals.revision_export:
@@ -504,7 +504,7 @@ class SXBATCHER_batch_manager(object):
         sxglobals.remote_assignment = []
 
         if sxglobals.share_cpus:
-            self.delete_submissions()
+            init.reset_batch_folders()
 
 
     def benchmark(self):
@@ -520,7 +520,6 @@ class SXBATCHER_batch_manager(object):
             False
             )
         try:
-            os.makedirs(os.path.realpath('batch_results'), exist_ok=True)
             then = time.perf_counter()
             t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
             t.start()
@@ -528,7 +527,7 @@ class SXBATCHER_batch_manager(object):
             now = time.perf_counter()
             logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f} seconds')
             sxglobals.performance_index = round(now-then, 2)
-            os.remove(str(os.path.join(os.path.realpath('batch_results'), 'paletted/Suzanne_root.fbx')))
+            init.reset_batch_folders()
         except OSError:
             sxglobals.performance_index = 0
 
@@ -885,9 +884,7 @@ class SXBATCHER_batch_local(object):
 
             if len(payload) > 0:
                 if init.transfer_files((sxglobals.master_node, sxglobals.file_transfer_port), (payload, for_transfer)):
-                    for file in for_transfer:
-                        os.remove(file)
-                    logging.info(f'{len(for_transfer)} result files transferred to master node, removed locally')
+                    logging.info(f'{len(for_transfer)} result files transferred to master node')
                 else:
                     logging.critical('Failed to transfer result files')
 
@@ -987,7 +984,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                     conn, addr = self.sock.accept()
                     current_client = addr[:]
                     logging.info(f'Got connection {addr}')
-                    os.makedirs(os.path.join(os.path.realpath('batch_results')), exist_ok=True)
 
                     # 1 - receive task data
                     b = bytearray()
@@ -1020,7 +1016,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
                             target_dir = os.path.realpath('batch_submissions')
                         else:
                             target_dir = os.path.join(sxglobals.export_path, task_data[i][file])
-                        os.makedirs(target_dir, exist_ok=True)
+                            os.makedirs(target_dir, exist_ok=True)
 
                         with open(os.path.join(target_dir, file), 'wb') as f:
                             left = size
@@ -1695,6 +1691,7 @@ batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
     args = init.get_args()
+    init.reset_batch_folders()
 
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),

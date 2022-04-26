@@ -565,6 +565,8 @@ class SXBATCHER_batch_manager(object):
                 # Track tasked nodes, check completions in file_listener_thread
                 sxglobals.tasked_nodes = list(node_tasks.keys())
                 for node_ip, task_list in node_tasks.items():
+                    if node_ip == sxglobals.ip_addr:
+                        node_ip = '127.0.0.1'
                     # Submit files to node
                     source_files = []
                     for task in task_list:
@@ -972,7 +974,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.bufsize = sxglobals.buffer_size
         self.timeout = 90.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.bind((address, port))
+        self.sock.bind(('', port))
         self.sock.settimeout(self.timeout)
 
 

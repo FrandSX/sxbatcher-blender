@@ -349,8 +349,8 @@ class SXBATCHER_init(object):
                                 logging.debug(f'Transferring {file}')
                                 while chunk := f.read(bufsize):
                                     sock.send(chunk)
-                                sock.shutdown(socket.SHUT_RDWR)
-                                sock.close()
+                        sock.shutdown(socket.SHUT_RDWR)
+                        sock.close()
                     y = True
                 except (ConnectionResetError, TimeoutError):
                     time.sleep(0.1)

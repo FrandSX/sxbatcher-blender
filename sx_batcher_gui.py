@@ -314,7 +314,7 @@ class SXBATCHER_init(object):
             if os.path.exists(folder):
                 shutil.rmtree(folder)
             os.makedirs(folder, exist_ok=True)
-        logging.info('Batch folders reset')
+        logging.debug('Batch folders reset')
 
 
     # files are path objects, address is a tuple of IP address and port
@@ -1691,7 +1691,6 @@ batch_local = SXBATCHER_batch_local()
 
 if __name__ == '__main__':
     args = init.get_args()
-    init.reset_batch_folders()
 
     logging.basicConfig(**{ k:v for k,v in (
         ('encoding', 'utf-8'),
@@ -1702,6 +1701,7 @@ if __name__ == '__main__':
     ) if v })
 
     # Pre-loop tasks and file batches
+    init.reset_batch_folders()
     if len(sys.argv) == 1:
         sxglobals.headless = False
     else:

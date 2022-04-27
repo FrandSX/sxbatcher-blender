@@ -528,6 +528,7 @@ class SXBATCHER_batch_manager(object):
             threads
             )
         try:
+            logging.info(f'Node {sxglobals.ip_addr} running performance benchmark')
             then = time.perf_counter()
             t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
             t.start()

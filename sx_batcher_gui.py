@@ -533,7 +533,7 @@ class SXBATCHER_batch_manager(object):
             conf_dict = init.load_conf()
             conf_dict['performance_index'] = str(sxglobals.performance_index)
             conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
-            init.save_conf(conf_path, conf_dict)
+            init.save_json(conf_path, conf_dict)
         except OSError:
             sxglobals.performance_index = 0
 

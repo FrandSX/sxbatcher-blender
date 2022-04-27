@@ -511,9 +511,9 @@ class SXBATCHER_batch_manager(object):
 
     def benchmark(self):
         if sxglobals.shared_cores == multiprocessing.cpu_count():
-            threads = 0
+            threads = '0'
         else:
-            threads = 1
+            threads = '1'
 
         benchmark_task = (
             sxglobals.blender_path,

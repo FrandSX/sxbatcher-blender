@@ -1738,7 +1738,8 @@ if __name__ == '__main__':
                 logging.info('Starting in headless mode')
                 logging.info(f'Listening for network tasks on port {sxglobals.discovery_port}')
                 sxglobals.share_cpus = True
-                sxglobals.shared_cores = multiprocessing.cpu_count()
+                if sxglobals.shared_cores == 0:
+                    sxglobals.shared_cores = multiprocessing.cpu_count()
 
                 if sxglobals.performance_index == 0:
                     if sxglobals.validate_paths():

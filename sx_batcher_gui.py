@@ -530,6 +530,10 @@ class SXBATCHER_batch_manager(object):
             logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f} seconds')
             sxglobals.performance_index = round(now-then, 2)
             init.reset_batch_folders()
+            conf_dict = init.load_conf()
+            conf_dict['performance_index'] = str(sxglobals.performance_index)
+            conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+            init.save_conf(conf_path, conf_dict)
         except OSError:
             sxglobals.performance_index = 0
 

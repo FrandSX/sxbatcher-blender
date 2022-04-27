@@ -822,7 +822,7 @@ class SXBATCHER_batch_local(object):
         staticvertexcolors = process_args[7]
         debug = process_args[8]
 
-        batch_args = [blender_path, "--background", "--factory-startup", "-noaudio", source_file, "--python", script_path]
+        batch_args = [blender_path, "--background", "--factory-startup", "--debug-depsgraph-no-threads", "-noaudio", source_file, "--python", script_path]
 
         if debug:
             batch_args.extend(["-d"])

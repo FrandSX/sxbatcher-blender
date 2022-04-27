@@ -895,7 +895,7 @@ class SXBATCHER_batch_local(object):
         logging.info(f'Node {sxglobals.ip_addr}: {export_count} objects exported in {sxglobals.now-sxglobals.then: .2f} seconds\n')
         if len(sxglobals.errors) > 0:
             logging.error(f'Node {sxglobals.ip_addr}: Errors in: {sxglobals.errors}')
-    
+
         # transfer files to master node
         if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:
             payload = []
@@ -1330,7 +1330,7 @@ class SXBATCHER_gui(tk.Tk):
                 sxglobals.share_cpus = core_count_bool.get()
                 cpu_count = multiprocessing.cpu_count()
 
-                if sxglobals.share_cpus and sxglobals.performance_index == 0:
+                if sxglobals.share_cpus and var == 'share_cpus_int':
                     if sxglobals.validate_paths():
                         manager.benchmark()
 
@@ -1758,7 +1758,7 @@ if __name__ == '__main__':
                 if sxglobals.shared_cores == 0:
                     sxglobals.shared_cores = multiprocessing.cpu_count()
 
-                if sxglobals.performance_index == 0:
+                if (sxglobals.performance_index == 0) or (args.sharecpus is not None):
                     if sxglobals.validate_paths():
                         manager.benchmark()
 

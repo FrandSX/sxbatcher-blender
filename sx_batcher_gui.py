@@ -191,6 +191,8 @@ class SXBATCHER_init(object):
             sxglobals.palette = str(args.palette)
         if args.staticvertexcolors:
             sxglobals.staticvertexcolors = args.staticvertexcolors
+        if args.verbose:
+            sxglobals.debug = True
 
         # Update batch processing options
         if args.revisionexport:

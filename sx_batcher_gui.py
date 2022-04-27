@@ -510,6 +510,11 @@ class SXBATCHER_batch_manager(object):
 
 
     def benchmark(self):
+        if sxglobals.shared_cores == multiprocessing.cpu_count():
+            threads = 0
+        else:
+            threads = 1
+
         benchmark_task = (
             sxglobals.blender_path,
             'perf_test.blend',
@@ -519,7 +524,8 @@ class SXBATCHER_batch_manager(object):
             '3',
             None,
             False,
-            False
+            False,
+            threads
             )
         try:
             then = time.perf_counter()
@@ -821,8 +827,9 @@ class SXBATCHER_batch_local(object):
         palette = process_args[6]
         staticvertexcolors = process_args[7]
         debug = process_args[8]
+        threads = process_args[9]
 
-        batch_args = [blender_path, "--background", "--factory-startup", "--threads", "1", "-noaudio", source_file, "--python", script_path]
+        batch_args = [blender_path, "--background", "--factory-startup", "--threads", threads, "-noaudio", source_file, "--python", script_path]
 
         if debug:
             batch_args.extend(["--debug"])
@@ -860,9 +867,19 @@ class SXBATCHER_batch_local(object):
     def worker_spawner(self, tasks, num_cores):
         logging.debug(f'Node {sxglobals.ip_addr} spawning workers')
 
+        if num_cores == multiprocessing.cpu_count():
+            threads = '0'
+        else:
+            threads = '1'
+
+        thread_tasks = []
+        for task in tasks:
+            task.append(threads)
+            thread_tasks.append(task)
+
         mp = multiprocessing.get_context("spawn")
         with mp.Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, error in enumerate(pool.imap(self.worker_process, tasks)):
+            for i, error in enumerate(pool.imap(self.worker_process, thread_tasks)):
                 progress = round((i + 1) / len(tasks) * 100)
                 # logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
                 if not sxglobals.headless:

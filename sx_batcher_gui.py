@@ -1631,13 +1631,13 @@ class SXBATCHER_gui(tk.Tk):
         use_nodes_bool = tk.BooleanVar(self, name='use_nodes_bool')
         core_count_int = tk.IntVar(self, value=sxglobals.shared_cores, name='share_cpus_int')
 
-        core_count_bool.trace_add('write', update_item)
-        use_nodes_bool.trace_add('write', update_item)
-        core_count_int.trace_add('write', update_item)
-
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)
         use_nodes_bool.set(sxglobals.use_network_nodes)
+
+        core_count_bool.trace_add('write', update_item)
+        use_nodes_bool.trace_add('write', update_item)
+        core_count_int.trace_add('write', update_item)
 
         c5 = tk.Checkbutton(self.tab3, text='Share CPU Cores ('+str(multiprocessing.cpu_count())+'):', variable=core_count_bool, justify='left', anchor='w')
         c5.grid(row=2, column=2, sticky='w')

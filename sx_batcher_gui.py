@@ -510,27 +510,22 @@ class SXBATCHER_batch_manager(object):
 
 
     def benchmark(self):
-        if sxglobals.shared_cores == multiprocessing.cpu_count():
-            threads = '0'
-        else:
-            threads = '1'
-
-        benchmark_task = (
-            sxglobals.blender_path,
-            'perf_test.blend',
-            str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
-            str(os.path.realpath('batch_results')),
-            os.path.abspath(sxglobals.sxtools_path),
-            '3',
-            None,
-            False,
-            False,
-            threads
-            )
+        benchmark_task = {
+            'blender_path': sxglobals.blender_path,
+            'source_file': 'perf_test.blend',
+            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
+            'export_path': str(os.path.realpath('batch_results')),
+            'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'subdivision': '3',
+            'palette': None,
+            'static_vertex_colors': False,
+            'debug': False,
+            'threads': '0' if sxglobals.shared_cores == multiprocessing.cpu_count() else '1'
+        }
         try:
-            logging.info(f'Node {sxglobals.ip_addr} running performance benchmark')
+            logging.info(f'Node {sxglobals.ip_addr} running performance benchmark with threads {benchmark_task["threads"]}')
             then = time.perf_counter()
-            t = threading.Thread(target=batch_local.worker_process, args=[benchmark_task, ])
+            t = threading.Thread(target=batch_local.worker_process, kwargs=benchmark_task)
             t.start()
             t.join()
             now = time.perf_counter()
@@ -613,20 +608,10 @@ class SXBATCHER_batch_manager(object):
 
     def prepare_local_tasks(self):
         # grab blender work script from the location of this script
-        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
         asset_path = os.path.split(sxglobals.catalogue_path)[0].replace('//', os.path.sep)
-        subdivision = None
-        palette = None
-
-        # check Blender override flags
-        if sxglobals.subdivision:
-            subdivision = str(sxglobals.subdivision_count)
-        if sxglobals.palette:
-            palette = sxglobals.palette_name
 
         # get asset paths from catalogue, map to file system locations, remove doubles
         source_assets = self.get_source_assets(sxglobals.revision_export)
-        export_path = os.path.abspath(sxglobals.export_path)
 
         source_files = []
         for asset in source_assets:
@@ -636,55 +621,36 @@ class SXBATCHER_batch_manager(object):
             logging.debug(f'\nNode {sxglobals.ip_addr} source files: {source_files}')
 
         # Generate task definition for each local headless Blender
-        tasks = []
-        for file in source_files:
-            tasks.append(
-                (sxglobals.blender_path,
-                file,
-                script_path,
-                os.path.abspath(export_path),
-                os.path.abspath(sxglobals.sxtools_path),
-                subdivision,
-                palette,
-                sxglobals.static_vertex_colors,
-                sxglobals.debug))
+        return [{
+            'blender_path':sxglobals.blender_path,
+            'source_file':file,
+            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
+            'export_path': os.path.abspath(sxglobals.export_path),
+            'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'subdivision': str(sxglobals.subdivision_count) if sxglobals.subdivision else None,
+            'palette': sxglobals.palette_name if sxglobals.palette else None,
+            'static_vertex_colors': sxglobals.static_vertex_colors,
+            'debug': sxglobals.debug,
+            'threads': '0'
+        } for file in source_files]
 
-        return tasks
 
 
     def prepare_received_tasks(self):
         # grab blender work script from the location of this script
-        script_path = str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py')
-        asset_path = os.path.realpath('batch_submissions')
-        remote_tasks = sxglobals.remote_assignment
-        tasks = []
 
-        for remote_task in remote_tasks:
-            subdivision_count = None
-            palette_name = None
-            asset = remote_task['asset']
-            if remote_task['subdivision'] == 'True':
-                subdivision_count = str(remote_task['subdivision_count'])
-            if remote_task['palette'] == 'True':
-                palette_name = remote_task['palette_name']
-            static_vertex_colors = True if remote_task['static_vertex_colors'] == 'True' else False
-            debug = True if remote_task['debug'] == 'True' else False
-            export_path = str(os.path.realpath('batch_results'))
-            file = os.path.join(asset_path, asset)
- 
-            # Generate task definition for each local headless Blender
-            tasks.append(
-                (sxglobals.blender_path,
-                file,
-                script_path,
-                os.path.abspath(export_path),
-                os.path.abspath(sxglobals.sxtools_path),
-                subdivision_count,
-                palette_name,
-                static_vertex_colors,
-                debug))
-
-        return tasks
+        return [{
+            'blender_path': sxglobals.blender_path,
+            'source_file': str(pathlib.Path('batch_submissions', remote_task['asset']).resolve()),
+            'script_path': (pathlib.Path(__file__).parent / 'sx_batch.py').resolve(),
+            'export_path': str(pathlib.Path('batch_results').resolve()),
+            'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'subdivision': str(remote_task['subdivision_count']) if remote_task['subdivision'] == 'True' else None,
+            'palette': remote_task['palette_name'] if remote_task['palette'] == 'True' else None,
+            'static_vertex_colors': True if remote_task['static_vertex_colors'] == 'True' else False,
+            'debug': True if remote_task['debug'] == 'True' else False,
+            'threads': '0' if sxglobals.shared_cores == multiprocessing.cpu_count() else '1'
+        } for remote_task in sxglobals.remote_assignment]
 
 
     def prepare_node_tasks(self):
@@ -818,17 +784,14 @@ class SXBATCHER_batch_local(object):
         return None
 
 
-    def worker_process(self, process_args):
-        blender_path = process_args[0]
-        source_file = process_args[1]
-        script_path = process_args[2]
-        export_path = process_args[3]
-        sxtools_path = process_args[4]
-        subdivision = process_args[5]
-        palette = process_args[6]
-        staticvertexcolors = process_args[7]
-        debug = process_args[8]
-        threads = process_args[9]
+    # stupid function shim because imap api is bad
+    def shim(self, kwargs):
+        return self.worker_process(**kwargs)
+
+    
+    def worker_process(self, *,
+        blender_path, source_file, script_path, export_path, sxtools_path, subdivision,
+        palette, static_vertex_colors, debug, threads):
 
         batch_args = [blender_path, "--background", "--factory-startup", "--threads", threads, "-noaudio", source_file, "--python", script_path]
 
@@ -841,7 +804,7 @@ class SXBATCHER_batch_local(object):
             batch_args.extend(["-sd", subdivision])
         if palette is not None:
             batch_args.extend(["-sp", palette])
-        if staticvertexcolors:
+        if static_vertex_colors:
             batch_args.extend(["-st"])
 
         try:
@@ -868,19 +831,10 @@ class SXBATCHER_batch_local(object):
     def worker_spawner(self, tasks, num_cores):
         logging.debug(f'Node {sxglobals.ip_addr} spawning workers')
 
-        if num_cores == multiprocessing.cpu_count():
-            threads = '0'
-        else:
-            threads = '1'
-
-        thread_tasks = []
-        for task in tasks:
-            task.append(threads)
-            thread_tasks.append(task)
-
         mp = multiprocessing.get_context("spawn")
         with mp.Pool(processes=num_cores, maxtasksperchild=1) as pool:
-            for i, error in enumerate(pool.imap(self.worker_process, thread_tasks)):
+            
+            for i, error in enumerate(pool.imap(self.shim, tasks)):
                 progress = round((i + 1) / len(tasks) * 100)
                 # logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
                 if not sxglobals.headless:
@@ -1728,6 +1682,9 @@ if __name__ == '__main__':
 
     # Pre-loop tasks and file batches
     init.reset_batch_folders()
+
+
+    
     if len(sys.argv) == 1:
         sxglobals.headless = False
     else:

@@ -11,3 +11,4 @@ sx_export_log_solidlocal.txt
 *.log
 batch_results/
 batch_submissions/
+*.patch

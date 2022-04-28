@@ -326,15 +326,15 @@ class SXBATCHER_init(object):
         sizemap = [(file.name, file.stat().st_size) for file in files]
         payload.insert(0, sizemap)
         bufsize = sxglobals.buffer_size
+        timeout = 30
 
         then = time.time()
         completed = False
-        while (time.time() - then < 90) and not completed:
+        while (time.time() - then < timeout) and not completed:
             x = False
-            while not x:
+            while (time.time() - then < timeout) and not x:
                 try:
-                    with socket.create_connection(address, timeout=10) as sock:
-                        # sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    with socket.create_connection(address, timeout=5) as sock:
                         sock.sendall(json.dumps(payload).encode('utf-8'))
                         sock.shutdown(socket.SHUT_RDWR)
                         sock.close()
@@ -344,10 +344,9 @@ class SXBATCHER_init(object):
                     logging.error(f'Node {sxglobals.ip_addr} retrying task data transfer')
             time.sleep(0.1)
             y = False
-            while not y:
+            while (time.time() - then < timeout) and not y:
                 try:
-                    with socket.create_connection(address, timeout=60) as sock:
-                        # sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    with socket.create_connection(address, timeout=20) as sock:
                         for file in files:
                             with open(file, 'rb') as f:
                                 logging.debug(f'Transferring {file}')
@@ -954,7 +953,6 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.bufsize = sxglobals.buffer_size
         self.timeout = 90.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.bind(('', port))
         self.sock.settimeout(self.timeout)
 

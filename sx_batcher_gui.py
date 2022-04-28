@@ -334,6 +334,7 @@ class SXBATCHER_init(object):
             while not x:
                 try:
                     with socket.create_connection(address, timeout=10) as sock:
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         sock.sendall(json.dumps(payload).encode('utf-8'))
                         sock.shutdown(socket.SHUT_RDWR)
                         sock.close()
@@ -346,6 +347,7 @@ class SXBATCHER_init(object):
             while not y:
                 try:
                     with socket.create_connection(address, timeout=60) as sock:
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         for file in files:
                             with open(file, 'rb') as f:
                                 logging.debug(f'Transferring {file}')
@@ -912,7 +914,7 @@ class SXBATCHER_node_discovery_thread(threading.Thread):
     def __init__(self, group, port, timeout=10):
         super().__init__()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.settimeout(timeout)
         self.sock.bind(('', port))
         packed = struct.pack('=4sl', socket.inet_aton(group), socket.INADDR_ANY)
@@ -952,6 +954,7 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
         self.bufsize = sxglobals.buffer_size
         self.timeout = 90.0
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.bind(('', port))
         self.sock.settimeout(self.timeout)
 

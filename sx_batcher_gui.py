@@ -784,7 +784,7 @@ class SXBATCHER_batch_local(object):
         return None
 
 
-    # stupid function shim because imap api is bad
+    # shim to expand keyword arguments
     def shim(self, kwargs):
         return self.worker_process(**kwargs)
 
@@ -834,7 +834,7 @@ class SXBATCHER_batch_local(object):
         mp = multiprocessing.get_context("spawn")
         with mp.Pool(processes=num_cores, maxtasksperchild=1) as pool:
             
-            for i, error in enumerate(pool.imap(self.shim, tasks)):
+            for i, error in enumerate(pool.map(self.shim, tasks)):
                 progress = round((i + 1) / len(tasks) * 100)
                 # logging.info(f'Node {sxglobals.ip_addr}: Progress {progress}%')
                 if not sxglobals.headless:

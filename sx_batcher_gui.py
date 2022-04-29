@@ -570,7 +570,6 @@ class SXBATCHER_batch_manager(object):
             # Send files to be processed to network nodes
             if len(sxglobals.export_objs) > 0:
                 node_tasks = self.prepare_node_tasks()
-                logging.info(f'Node workload distribution { {node: len(tasks) for node, tasks in node_tasks.items()} }')
                 # Track tasked nodes, check completions in file_listener_thread
                 sxglobals.tasked_nodes = list(node_tasks.keys())
                 for node_ip, task_list in node_tasks.items():
@@ -747,7 +746,6 @@ class SXBATCHER_batch_manager(object):
                 total_cost = 0
                 for asset in source_assets:
                     total_cost += asset[1]
-                logging.debug(f'Total cost: {total_cost}')
 
                 cost_shares = []
                 for num_cores in bias_cores:
@@ -757,13 +755,14 @@ class SXBATCHER_batch_manager(object):
                 start = 0
                 for i, node in enumerate(nodes):
                     node_ip = node[0]
-                    logging.debug(f'Cost share: {node_ip} {cost_shares[i]}')
-
+                    share = cost_shares[i]
                     for j in range(start, len(tasks)):
                         if cost_shares[i] > 0:
                             node_tasks[node_ip].append(tasks[j])
                             cost_shares[i] -= tasks[j]['cost']
                             start += 1
+
+                    logging.info(f'Node: {node[0]}\tWork Share: {share / total_cost: .1%} ({len(node_tasks[node[0]])} files)')
 
         # remove empty task lists
         empty_nodes = []

@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (0, 2, 1),
+    'version': (1, 0, 2),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -13,6 +13,7 @@ bl_info = {
 import bpy
 import json
 import os
+from bpy.app.handlers import persistent
 
 # ------------------------------------------------------------------------
 #    Settings and preferences
@@ -80,6 +81,62 @@ def save_asset_data(catalogue_path, data_dict):
         message_box('Catalogue path not set!', 'SX Batcher Error', 'ERROR')
 
 
+# Offset revision prior to file save
+@persistent
+def save_pre_handler(dummy):
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            if ('revision' not in obj.keys()):
+                obj['revision'] = 1
+            else:
+                revision = obj['revision']
+                obj['revision'] = revision + 1
+
+
+# On file save, update revision and cost in the asset catalogue
+@persistent
+def save_post_handler(dummy):
+    prefs = bpy.context.preferences.addons['sxbatcher'].preferences
+    catalogue_dict = {}
+    objs = []
+    revision = 1
+
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            objs.append(obj)
+            if obj['revision'] > revision:
+                revision = obj['revision']
+
+    s = bpy.context.scene.statistics(bpy.context.view_layer)
+    cost = s.split("Tris:")[1].split(' ')[0].replace(',', '')
+
+    if len(prefs.cataloguepath) > 0:
+        try:
+            with open(prefs.cataloguepath, 'r') as input:
+                catalogue_dict = json.load(input)
+                input.close()
+
+            file_path = bpy.data.filepath
+            asset_path = os.path.split(prefs.cataloguepath)[0]
+            # prefix = os.path.commonpath([asset_path, file_path])
+            # file_rel_path = os.path.relpath(file_path, asset_path)
+
+            for category in catalogue_dict:
+                for key in catalogue_dict[category]:
+                    key_path = key.replace('//', os.path.sep)
+                    if os.path.samefile(file_path, os.path.join(asset_path, key_path)):
+                        catalogue_dict[category][key]['revision'] = str(revision)
+                        catalogue_dict[category][key]['cost'] = cost
+
+            with open(prefs.cataloguepath, 'w') as output:
+                json.dump(catalogue_dict, output, indent=4)
+                output.close()
+
+        except (ValueError, IOError) as error:
+            message_box('Failed to update file revision in Asset Catalogue file.', 'SX Batcher Error', 'ERROR')
+            return False, None
+
+
 # ------------------------------------------------------------------------
 #    UI Panel and Pie Menu
 # ------------------------------------------------------------------------
@@ -109,18 +166,49 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
     bl_label = 'Add File to Asset Catalogue'
     bl_description = 'Add current file to the Asset Catalogue for batch exporting'
 
+    assetCategory: bpy.props.StringProperty(name='Category')
     assetTags: bpy.props.StringProperty(name='Tags')
 
 
+    def check_existing(self, context):
+        prefs = context.preferences.addons['sxbatcher'].preferences
+        file_path = bpy.data.filepath
+        asset_path = os.path.split(prefs.cataloguepath)[0]
+        asset_dict = {}
+        result, asset_dict = load_asset_data(prefs.cataloguepath)
+        if not result:
+            return {'FINISHED'}
+        for category in asset_dict.keys():
+            for key in asset_dict[category].keys():
+                key_path = key.replace('//', os.path.sep)
+                if os.path.samefile(file_path, os.path.join(asset_path, key_path)):
+                    return True
+        return False
+
+
+    def check_saved(self, context):
+        if len(bpy.data.filepath) == 0:
+            message_box('Current file has not been saved!', 'SX Batcher Error', 'ERROR')
+            return False
+        else:
+            return True
+
+
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        if self.check_saved(context):
+            return context.window_manager.invoke_props_dialog(self)
+        else:
+            return {'FINISHED'}
 
 
     def draw(self, context):
         layout = self.layout
         col = layout.column()
+        col.prop(self, 'assetCategory')
         col.prop(self, 'assetTags')
         col.label(text='Use only spaces between multiple tags')
+        if self.check_existing(context):
+            col.label(text='File already catalogue, existing tags will be overwritten')
 
 
     def execute(self, context):
@@ -130,8 +218,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         if not result:
             return {'FINISHED'}
 
-        # NOTE: Asset category should be adjusted to your project needs!
-        asset_category = 'blender_file'
+        asset_category = self.assetCategory
         asset_tags = self.assetTags.split(' ')
         file_path = bpy.data.filepath
 
@@ -149,21 +236,26 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
             message_box('File not located under asset folders!', 'SX Batcher Error', 'ERROR')
             return {'FINISHED'}
 
-        # Check if file already in catalogue
-        for category in asset_dict.keys():
-            for key in asset_dict[category].keys():
-                key_path = key.replace('//', os.path.sep)
-                if os.path.samefile(file_path, os.path.join(asset_path, key_path)):
-                    message_box('File already in Catalogue!', 'SX Batcher Error', 'ERROR')
-                    return {'FINISHED'}
-
         # Check if the Catalogue already contains the asset category
         if asset_category not in asset_dict.keys():
             asset_dict[asset_category] = {}
 
+        # Store highest revision in the scene into catalogue
+        revision = 1
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH':
+                if ('revision' not in obj.keys()):
+                    obj['revision'] = 1
+                elif obj['revision'] > revision:
+                    revision = obj['revision']
+
+        # Update cost (vert count)
+        s = context.scene.statistics(context.view_layer)
+        cost = s.split("Tris:")[1].split(' ')[0].replace(',', '')
+
         # Add asset to category
-        objs = [obj.name for obj in bpy.context.view_layer.objects if obj.type == 'MESH']
-        asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = {'tags': asset_tags, 'objects': objs}
+        objs = [obj.name for obj in context.view_layer.objects if obj.type == 'MESH']
+        asset_dict[asset_category][file_rel_path.replace(os.path.sep, '//')] = {'tags': asset_tags, 'objects': objs, 'revision': str(revision), 'cost': cost}
 
         # Save entry with a platform-independent path separator
         save_asset_data(prefs.cataloguepath, asset_dict)
@@ -216,11 +308,17 @@ def register():
     for cls in classes:
         register_class(cls)
 
+    bpy.app.handlers.save_pre.append(save_pre_handler)    
+    bpy.app.handlers.save_post.append(save_post_handler)
+
 
 def unregister():
     from bpy.utils import unregister_class
     for cls in reversed(classes):
         unregister_class(cls)
+
+    bpy.app.handlers.save_pre.remove(save_pre_handler)
+    bpy.app.handlers.save_post.remove(save_post_handler)
 
 
 if __name__ == '__main__':

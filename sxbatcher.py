@@ -300,7 +300,7 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
 
 
     def check_saved(self, context):
-        if len(bpy.data.filepath == 0):
+        if len(bpy.data.filepath) == 0:
             message_box('Current file has not been saved!', 'SX Batcher Error', 'ERROR')
             return False
         else:

@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SX Batcher',
     'author': 'Jani Kahrama / Secret Exit Ltd.',
-    'version': (1, 1, 4),
+    'version': (1, 2, 2),
     'blender': (2, 80, 0),
     'location': 'View3D',
     'description': 'Asset catalogue management tool',
@@ -47,7 +47,7 @@ def message_box(message='', title='SX Batcher', icon='INFO'):
 
 def load_catalogue():
     catalogue_path = bpy.context.preferences.addons['sxbatcher'].preferences.cataloguepath
-    if catalogue_path is not None:
+    if os.path.isfile(catalogue_path):
         try:
             with open(catalogue_path, 'r') as input:
                 temp_dict = {}
@@ -61,8 +61,9 @@ def load_catalogue():
             message_box('Catalogue file not found. Creating empty template', 'SX Batcher Error', 'ERROR')
             sxglobals.catalogue = {}
     else:
-        message_box('Invalid Catalogue path', 'SX Batcher Error', 'ERROR')
-        sxglobals.catalogue = None
+        message_box('Creating new catalogue')
+        sxglobals.catalogue = {}
+        save_catalogue()
 
     return sxglobals.catalogue
 
@@ -310,9 +311,9 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
     def invoke(self, context, event):
         # Check if the open scene has been saved to a file
         if self.check_saved(context) and self.check_location(context):
-            return {'FINISHED'}
-        else:
             return context.window_manager.invoke_props_dialog(self)
+        else:
+            return {'FINISHED'}
 
 
     def draw(self, context):

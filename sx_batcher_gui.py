@@ -15,6 +15,7 @@ import sys
 import platform
 import tkinter as tk
 from tkinter import ttk, filedialog
+from idlelib.tooltip import Hovertip
 
 
 # ------------------------------------------------------------------------
@@ -32,6 +33,7 @@ class SXBATCHER_globals(object):
         self.catalogue_path = conf.get('catalogue_path', '')
         self.export_path = conf.get('export_path', '')
         self.sxtools_path = conf.get('sxtools_path', '')
+        self.script_path = conf.get('script_path', '')
 
         # Distributed processing settings
         self.share_cpus = bool(int(conf.get('share_cpus', False)))
@@ -97,8 +99,10 @@ class SXBATCHER_globals(object):
             self.export_path = self.export_path.replace('//', os.path.sep) if os.path.isdir(self.export_path.replace('//', os.path.sep)) else ''
         if self.sxtools_path != '':
             self.sxtools_path = self.sxtools_path.replace('//', os.path.sep) if os.path.isdir(self.sxtools_path.replace('//', os.path.sep)) else ''
+        if self.script_path != '':
+            self.script_path = self.script_path.replace('//', os.path.sep) if os.path.isfile(self.script_path.replace('//', os.path.sep)) else ''
 
-        return (self.blender_path != '') and (self.catalogue_path != '') and (self.export_path != '') and (self.sxtools_path != '')
+        return (self.blender_path != '') and (self.catalogue_path != '') and (self.export_path != '') and (self.sxtools_path != '') and  (self.script_path != '')
 
 
 # ------------------------------------------------------------------------
@@ -140,6 +144,7 @@ class SXBATCHER_init(object):
         parser.add_argument('-nw', '--node', action='store_true', help='Run as headless worker node')
         parser.add_argument('-b', '--blenderpath', help='Blender executable location')
         parser.add_argument('-o', '--open', help='Open a Catalogue file')
+        parser.add_argument('-w', '--scriptpath', help='Work script location')
         parser.add_argument('-s', '--sxtools', help='SX Tools folder')
         parser.add_argument('-e', '--exportpath', help='Export path')
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
@@ -172,6 +177,11 @@ class SXBATCHER_init(object):
         else:
             if sxglobals.catalogue_path is None:
                 logging.error('Catalogue path not specified')
+        if args.scriptpath is not None:
+            sxglobals.script_path = os.path.abspath(args.scriptpath)
+        else:
+            if sxglobals.script_path is None:
+                logging.error('Work script not specified')
         if args.sxtools is not None:
             sxglobals.sxtools_path = os.path.abspath(args.sxtools)
         else:
@@ -271,6 +281,7 @@ class SXBATCHER_init(object):
             'blender_path': sxglobals.blender_path.replace(os.path.sep, '//') if sxglobals.blender_path != '' else '',
             'catalogue_path' : sxglobals.catalogue_path.replace(os.path.sep, '//') if sxglobals.catalogue_path != '' else '',
             'export_path': sxglobals.export_path.replace(os.path.sep, '//') if sxglobals.export_path != '' else '',
+            'script_path': sxglobals.script_path.replace(os.path.sep, '//') if sxglobals.script_path != '' else '',
             'sxtools_path': sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else '',
             'debug': str(int(sxglobals.debug)),
             'palette': str(int(sxglobals.palette)),
@@ -624,7 +635,7 @@ class SXBATCHER_batch_manager(object):
         return [{
             'blender_path':sxglobals.blender_path,
             'source_file':file,
-            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
+            'script_path': sxglobals.script_path,
             'export_path': os.path.abspath(sxglobals.export_path),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
             'subdivision': str(sxglobals.subdivision_count) if sxglobals.subdivision else None,
@@ -642,7 +653,7 @@ class SXBATCHER_batch_manager(object):
         return [{
             'blender_path': sxglobals.blender_path,
             'source_file': str(pathlib.Path('batch_submissions', remote_task['asset']).resolve()),
-            'script_path': (pathlib.Path(__file__).parent / 'sx_batch.py').resolve(),
+            'script_path': sxglobals.script_path,
             'export_path': str(pathlib.Path('batch_results').resolve()),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
             'subdivision': str(remote_task['subdivision_count']) if remote_task['subdivision'] == 'True' else None,
@@ -1250,13 +1261,15 @@ class SXBATCHER_gui(tk.Tk):
         def update_path(var, index, mode):
             if var == 'blender_path_var':
                 sxglobals.blender_path = e1_str.get()
-            elif var == 'sxtools_path_var':
-                sxglobals.sxtools_path = e2_str.get()
+            elif var == 'script_path_var':
+                sxglobals.script_path = e2_str.get()
             elif var == 'catalogue_path_var':
                 sxglobals.catalogue_path = e3_str.get()
                 refresh_catalogue_view()
             elif var == 'export_path_var':
                 sxglobals.export_path = e4_str.get()
+            elif var == 'sxtools_path_var':
+                sxglobals.sxtools_path = e7_str.get()
             self.state_manager()
 
 
@@ -1328,7 +1341,7 @@ class SXBATCHER_gui(tk.Tk):
             sxglobals.validate_paths()
 
         def browse_button_sp():
-            e2_str.set(filedialog.askdirectory())
+            e2_str.set(filedialog.askopenfilename())
             sxglobals.validate_paths()
 
 
@@ -1339,6 +1352,11 @@ class SXBATCHER_gui(tk.Tk):
 
         def browse_button_ep():
             e4_str.set(filedialog.askdirectory())
+            sxglobals.validate_paths()
+
+
+        def browse_button_sxp():
+            e7_str.set(filedialog.askdirectory())
             sxglobals.validate_paths()
 
 
@@ -1388,6 +1406,8 @@ class SXBATCHER_gui(tk.Tk):
         self.dropdown['values'] = list(sxglobals.catalogue.keys())
         self.dropdown['state'] = 'readonly'
         self.dropdown.pack(side='top', anchor='nw', expand=False)
+
+        ddc_tip = Hovertip(self.dropdown,'Browse the categories of the asset catalogue.', hover_delay=1000)
 
         # source object list
         self.frame_items = tk.Frame(master=self.frame_a)
@@ -1448,6 +1468,8 @@ class SXBATCHER_gui(tk.Tk):
             height=3,
         )
         button_batch_tagged.pack(pady=10)
+
+        tag_tip = Hovertip(tag_entry,'Select objects on the category list to see their tags.', hover_delay=1000)
 
 
         button_clear_exports = tk.Button(
@@ -1514,7 +1536,7 @@ class SXBATCHER_gui(tk.Tk):
         l_title1.grid(row=1, column=1, padx=10, pady=10)
         l1 = tk.Label(tab2, text='Blender Path:', width=20, justify='left', anchor='w')
         l1.grid(row=2, column=1, sticky='w', padx=10)
-        l2 = tk.Label(tab2, text='SX Tools Library Path:', width=20, justify='left', anchor='w')
+        l2 = tk.Label(tab2, text='Work Script Path:', width=20, justify='left', anchor='w')
         l2.grid(row=3, column=1, sticky='w', padx=10)
         l3 = tk.Label(tab2, text='Catalogue Path:', width=20, justify='left', anchor='w')
         l3.grid(row=4, column=1, sticky='w', padx=10)
@@ -1522,12 +1544,12 @@ class SXBATCHER_gui(tk.Tk):
         l4.grid(row=5, column=1, sticky='w', padx=10)
 
         e1_str = tk.StringVar(self, name='blender_path_var')
-        e2_str = tk.StringVar(self, name='sxtools_path_var')
+        e2_str = tk.StringVar(self, name='script_path_var')
         e3_str = tk.StringVar(self, name='catalogue_path_var')
         e4_str = tk.StringVar(self, name='export_path_var')
 
         e1_str.set(sxglobals.blender_path)
-        e2_str.set(sxglobals.sxtools_path)
+        e2_str.set(sxglobals.script_path)
         e3_str.set(sxglobals.catalogue_path)
         e4_str.set(sxglobals.export_path)
 
@@ -1545,13 +1567,18 @@ class SXBATCHER_gui(tk.Tk):
         e4 = tk.Entry(tab2, textvariable=e4_str, width=60)
         e4.grid(row=5, column=2)
 
+        e1_tip = Hovertip(e1,'The location of the Blender executable file.', hover_delay=1000)
+        e2_tip = Hovertip(e2,'The location of headless batch script file.\nTypically yourscript.py in SX Batcher folder.', hover_delay=1000)
+        e3_tip = Hovertip(e3,'The location of the asset catalogue file.\nThis MUST be in the root folder of your asset library.', hover_delay=1000)
+        e4_tip = Hovertip(e4,'Select the export root folder. \nFBX-files will be saved to \ncategory-specific subfolders.', hover_delay=1000)
+
         l_empty = tk.Label(tab2, text=' ', width=10)
         l_empty.grid(row=1, column=3)
 
         button_browse_blenderpath = tk.Button(tab2, text='Browse', command=browse_button_bp)
         button_browse_blenderpath.grid(row=2, column=3)
-        button_browse_sxtoolspath = tk.Button(tab2, text='Browse', command=browse_button_sp)
-        button_browse_sxtoolspath.grid(row=3, column=3)
+        button_browse_scriptpath = tk.Button(tab2, text='Browse', command=browse_button_sp)
+        button_browse_scriptpath.grid(row=3, column=3)
         button_browse_cataloguepath = tk.Button(tab2, text='Browse', command=browse_button_cp)
         button_browse_cataloguepath.grid(row=4, column=3)
         button_browse_exportpath = tk.Button(tab2, text='Browse', command=browse_button_ep)
@@ -1560,62 +1587,89 @@ class SXBATCHER_gui(tk.Tk):
         button_save_settings = tk.Button(tab2, text='Save Settings')
         button_save_settings.grid(row=1, column=4, padx=10, pady=10)
 
-        l_title2 = tk.Label(tab2, text='Overrides')
+        # General SX Batcher Options
+        l_title2 = tk.Label(tab2, text='General')
         l_title2.grid(row=6, column=1, padx=10, pady=10)
 
+        c4_bool = tk.BooleanVar(self, name='debug_bool')
+        c5_bool = tk.BooleanVar(self, name='revision_bool')
+        c4_bool.set(sxglobals.debug)
+        c5_bool.set(sxglobals.revision_export)
+        c4_bool.trace_add('write', update_item)
+        c5_bool.trace_add('write', update_item)
+        c4 = tk.Checkbutton(tab2, text='Blender Debug Output', variable=c4_bool, justify='left', anchor='w')
+        c4.grid(row=7, column=1, sticky='w', padx=10)
+        c5 = tk.Checkbutton(tab2, text='Only Batch Changed Revisions', variable=c5_bool, justify='left', anchor='w')
+        c5.grid(row=8, column=1, sticky='w', padx=10)
+
+        c4_tip = Hovertip(c4,'Verbose Blender debug output.', hover_delay=1000)
+        c5_tip = Hovertip(c5,'Only process files with changed revisions from previous export.\nHuge time saver!', hover_delay=1000)
+
+        l_title3 = tk.Label(tab2, text='SX Batcher Debug Level')
+        l_title3.grid(row=9, column=1, padx=10, pady=10)
+
+        self.debug_var = tk.StringVar(self, name='debug_level_var')
+
+        self.debug_dropdown = ttk.Combobox(tab2, textvariable=self.debug_var)
+        self.debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
+        self.debug_dropdown['state'] = 'readonly'
+        self.debug_dropdown.grid(row=9, column=2, sticky='w')
+
+        self.debug_var.trace_add('write', update_item)
+
+        dd_tip = Hovertip(self.debug_dropdown,'Select the verbosity of debug messages.', hover_delay=1000)
+
+        # Work Batch Required Settings
+        l_title4 = tk.Label(tab2, text='Work Script Settings')
+        l_title4.grid(row=10, column=1, padx=10, pady=10)
+
+        l2 = tk.Label(tab2, text='SX Tools Library Path:', width=20, justify='left', anchor='w')
+        l2.grid(row=11, column=1, sticky='w', padx=10)
+        e7_str = tk.StringVar(self, name='sxtools_path_var')
+        e7_str.set(sxglobals.sxtools_path)
+        e7_str.trace_add('write', update_path)
+        e7 = tk.Entry(tab2, textvariable=e7_str, width=60)
+        e7.grid(row=11, column=2)
+        button_browse_sxtoolspath = tk.Button(tab2, text='Browse', command=browse_button_sxp)
+        button_browse_sxtoolspath.grid(row=11, column=3)
+
+        e7_tip = Hovertip(e7,'SX TOOLS ONLY:\nChoose the folder containing SX Tools library files.\nTypically SX Tools folder.', hover_delay=1000)
+
+        # Work Batch Optional Settings
         c1_bool = tk.BooleanVar(self, name='palette_bool')
         c2_bool = tk.BooleanVar(self, name='subdivision_bool')
         c3_bool = tk.BooleanVar(self, name='flatten_bool')
-        c4_bool = tk.BooleanVar(self, name='debug_bool')
-        c5_bool = tk.BooleanVar(self, name='revision_bool')
+
         e5_str = tk.StringVar(self, name='palettename_str')
         e6_int = tk.IntVar(self, value=0, name='subdivision_int')
 
         c1_bool.set(sxglobals.palette)
         c2_bool.set(sxglobals.subdivision)
         c3_bool.set(sxglobals.static_vertex_colors)
-        c4_bool.set(sxglobals.debug)
-        c5_bool.set(sxglobals.revision_export)
+
         e5_str.set(sxglobals.palette_name)
         e6_int.set(sxglobals.subdivision_count)
 
         c1_bool.trace_add('write', update_item)
         c2_bool.trace_add('write', update_item)
         c3_bool.trace_add('write', update_item)
-        c4_bool.trace_add('write', update_item)
-        c5_bool.trace_add('write', update_item)
+
         e5_str.trace_add('write', update_item)
         e6_int.trace_add('write', update_item)
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
-        c1.grid(row=7, column=1, sticky='w', padx=10)
+        c1.grid(row=12, column=1, sticky='w', padx=10)
         c2 = tk.Checkbutton(tab2, text='Subdivision:', variable=c2_bool, justify='left', anchor='w')
-        c2.grid(row=8, column=1, sticky='w', padx=10)
+        c2.grid(row=13, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
-        c3.grid(row=9, column=1, sticky='w', padx=10)
-        c4 = tk.Checkbutton(tab2, text='Blender Debug Output', variable=c4_bool, justify='left', anchor='w')
-        c4.grid(row=10, column=1, sticky='w', padx=10)
-        c5 = tk.Checkbutton(tab2, text='Only Batch Changed Revisions', variable=c5_bool, justify='left', anchor='w')
-        c5.grid(row=11, column=1, sticky='w', padx=10)
-
+        c3.grid(row=14, column=1, sticky='w', padx=10)
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
-        e5.grid(row=7, column=2, sticky='w')
+        e5.grid(row=12, column=2, sticky='w')
         e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
-        e6.grid(row=8, column=2, sticky='w')
+        e6.grid(row=13, column=2, sticky='w')
 
-        # Debug Level
-        l_title3 = tk.Label(tab2, text='Debug Level')
-        l_title3.grid(row=13, column=1, padx=10, pady=10)
-
-        self.debug_var = tk.StringVar(self, name='debug_level_var')
-        # self.debug_var.set('Info')
-
-        self.debug_dropdown = ttk.Combobox(tab2, textvariable=self.debug_var)
-        self.debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
-        self.debug_dropdown['state'] = 'readonly'
-        self.debug_dropdown.grid(row=13, column=2, sticky='w')
-
-        self.debug_var.trace_add('write', update_item)
+        e5_tip = Hovertip(e5,'SX TOOLS ONLY:\nIf checkbox enabled, the name of the palette to apply to all processed files.', hover_delay=1000)
+        e6_tip = Hovertip(e6,'SX TOOLS ONLY:\nOverride the subdivision level of the processed files.', hover_delay=1000)
 
         # Event handling
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)
@@ -1643,8 +1697,12 @@ class SXBATCHER_gui(tk.Tk):
         c6 = tk.Checkbutton(self.tab3, text='Use Network Nodes', variable=use_nodes_bool, justify='left', anchor='w')
         c6.grid(row=3, column=2, sticky='w')
 
-        e7 = tk.Entry(self.tab3, textvariable=core_count_int, width=3, justify='left')
-        e7.grid(row=2, column=3, sticky='w')
+        e8 = tk.Entry(self.tab3, textvariable=core_count_int, width=3, justify='left')
+        e8.grid(row=2, column=3, sticky='w')
+
+        c5_tip = Hovertip(c5,'Share CPU resources with other computers on your local network.\nBlender processes are launched as single-threaded if shared cores is below max.', hover_delay=1000)
+        e8_tip = Hovertip(e8,'Share CPU resources with other computers on your local network.\nBlender processes are launched as single-threaded if shared cores is below max.', hover_delay=1000)
+        c6_tip = Hovertip(c6,'Use network nodes to process file batches. \nEnable Share CPU Cores to ALSO use your local computer.', hover_delay=1000)
 
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
         l_title5.grid(row=4, column=2, padx=10, pady=10)

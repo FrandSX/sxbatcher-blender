@@ -332,10 +332,11 @@ class SXBATCHER_OT_catalogue_add(bpy.types.Operator):
         asset_path = os.path.split(prefs.cataloguepath)[0]
         file_rel_path = os.path.relpath(file_path, asset_path)
 
-        # Store highest revision in the scene into catalogue
+        # Store category into objects and highest revision in the scene into catalogue
         revision = 1
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
+                obj['category'] = asset_category
                 if ('revision' not in obj.keys()):
                     obj['revision'] = 1
                 elif obj['revision'] > revision:

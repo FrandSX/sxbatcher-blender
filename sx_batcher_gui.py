@@ -525,7 +525,7 @@ class SXBATCHER_batch_manager(object):
         benchmark_task = {
             'blender_path': sxglobals.blender_path,
             'source_file': 'perf_test.blend',
-            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx_batch.py'),
+            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx2_batch.py'),
             'export_path': str(os.path.realpath('batch_results')),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
             'subdivision': '3',

@@ -866,11 +866,11 @@ class SXBATCHER_batch_local(object):
         if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:
             payload = []
             for_transfer = []
-            for root, subdirs, files in os.walk('batch_results'):
+            for current_folder, subdirs, files in os.walk('batch_results'):
                 for file in files:
                     if file.endswith('.fbx'):
-                        file_path = pathlib.Path(os.path.join(root, file))
-                        payload.append({'magic': 'ankdf89d', file: os.path.basename(root)})
+                        file_path = pathlib.Path(os.path.join(current_folder, file))
+                        payload.append({'magic': 'ankdf89d', file: os.path.relpath(current_folder, 'batch_results')})
                         for_transfer.append(file_path)
 
             if len(payload) > 0:

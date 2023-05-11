@@ -1,5 +1,6 @@
 import argparse
 import bpy
+import logging
 import os
 import sys
 
@@ -28,6 +29,7 @@ library_path = os.path.abspath(args.librarypath) + os.path.sep
 #    The below steps are designed for use with SX Tools 2 Blender addon.
 #    Edit according to the needs of your project.
 # ------------------------------------------------------------------------
+
 # bpy.ops.wm.addon_install(filepath='/home/bob/sxtools-blender/sxtools.py')
 bpy.ops.preferences.addon_enable(module="sxtools2")
 bpy.context.preferences.addons['sxtools2'].preferences.libraryfolder = library_path
@@ -36,10 +38,9 @@ bpy.context.preferences.addons['sxtools2'].preferences.exportspace = 'LIN'
 bpy.context.preferences.addons['sxtools2'].preferences.exportroughness = 'SMOOTH'
 bpy.data.scenes["Scene"].sx2.exportfolder = export_path
 
-bpy.ops.object.select_all(action='SELECT')
-
-# If object has sxtools properties, convert first
-bpy.ops.sx2.sxtosx2('EXEC_DEFAULT')
+# If objects have legacy sxtools properties, convert first
+# bpy.ops.object.select_all(action='SELECT')
+# bpy.ops.sx2.sxtosx2('EXEC_DEFAULT')
 
 bpy.ops.object.select_all(action='SELECT')
 

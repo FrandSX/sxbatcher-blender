@@ -1,6 +1,5 @@
 import argparse
 import bpy
-import logging
 import os
 import sys
 

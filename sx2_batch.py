@@ -13,6 +13,7 @@ def get_args():
 
     # add parser rules
     parser.add_argument('-x', '--exportpath', help='Export Path')
+    parser.add_argument('-f', '--format', help='Export File Format')
     parser.add_argument('-l', '--librarypath', help='SX Tools Library Path')
     parser.add_argument('-sd', '--subdivision', help='Subdivision Level Override')
     parser.add_argument('-sp', '--palette', help='Palette Override')
@@ -36,6 +37,8 @@ bpy.context.preferences.addons['sxtools2'].preferences.flipsmartx = False
 bpy.context.preferences.addons['sxtools2'].preferences.exportspace = 'LIN'
 bpy.context.preferences.addons['sxtools2'].preferences.exportroughness = 'SMOOTH'
 bpy.data.scenes["Scene"].sx2.exportfolder = export_path
+if args.format is not None:
+    bpy.context.preferences.addons['sxtools2'].preferences.exportformat = args.format.upper()
 
 # If objects have legacy sxtools properties, convert first
 # bpy.ops.object.select_all(action='SELECT')

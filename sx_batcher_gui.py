@@ -55,6 +55,7 @@ class SXBATCHER_globals(object):
         self.revision_dict = {}
 
         # Blender setting overrides
+        self.export_format = conf.get('format', 'FBX')
         self.debug = bool(int(conf.get('debug', False)))
         self.palette = bool(int(conf.get('palette', False)))
         self.palette_name = conf.get('palette_name', '')
@@ -147,6 +148,7 @@ class SXBATCHER_init(object):
         parser.add_argument('-w', '--scriptpath', help='Work script location')
         parser.add_argument('-s', '--sxtools', help='SX Tools folder')
         parser.add_argument('-e', '--exportpath', help='Export path')
+        parser.add_argument('-f', '--format', type=str, help='Export file format')
         parser.add_argument('-a', '--all', action='store_true', help='Export the entire Catalogue')
         parser.add_argument('-c', '--category', help='Export all objects in a category (Default, Paletted...')
         parser.add_argument('-t', '--tag', help='Export all tagged objects')
@@ -205,6 +207,8 @@ class SXBATCHER_init(object):
             sxglobals.debug = True
 
         # Update batch processing options
+        if args.format:
+            sxglobals.export_format = args.format if args.format in ['fbx', 'gltf'] else 'fbx'
         if args.revisionexport:
             sxglobals.revision_export = True
         else:
@@ -284,6 +288,7 @@ class SXBATCHER_init(object):
             'script_path': sxglobals.script_path.replace(os.path.sep, '//') if sxglobals.script_path != '' else '',
             'sxtools_path': sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else '',
             'debug': str(int(sxglobals.debug)),
+            'format': sxglobals.export_format,
             'palette': str(int(sxglobals.palette)),
             'palette_name': sxglobals.palette_name,
             'subdivision': str(int(sxglobals.subdivision)),
@@ -638,6 +643,7 @@ class SXBATCHER_batch_manager(object):
             'script_path': sxglobals.script_path,
             'export_path': os.path.abspath(sxglobals.export_path),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'export_format': sxglobals.export_format if sxglobals.export_format else None,
             'subdivision': str(sxglobals.subdivision_count) if sxglobals.subdivision else None,
             'palette': sxglobals.palette_name if sxglobals.palette else None,
             'static_vertex_colors': sxglobals.static_vertex_colors,
@@ -656,6 +662,7 @@ class SXBATCHER_batch_manager(object):
             'script_path': sxglobals.script_path,
             'export_path': str(pathlib.Path('batch_results').resolve()),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'export_format': sxglobals.export_format,
             'subdivision': str(remote_task['subdivision_count']) if remote_task['subdivision'] == 'True' else None,
             'palette': remote_task['palette_name'] if remote_task['palette'] == 'True' else None,
             'static_vertex_colors': True if remote_task['static_vertex_colors'] == 'True' else False,
@@ -675,6 +682,7 @@ class SXBATCHER_batch_manager(object):
                     "magic": sxglobals.magic_task,
                     "master": sxglobals.ip_addr,
                     "asset": asset[0],
+                    "format": sxglobals.export_format,
                     "subdivision": str(sxglobals.subdivision),
                     "subdivision_count": str(sxglobals.subdivision_count),
                     "palette": str(sxglobals.palette),
@@ -801,7 +809,7 @@ class SXBATCHER_batch_local(object):
 
     
     def worker_process(self, *,
-        blender_path, source_file, script_path, export_path, sxtools_path, subdivision,
+        blender_path, source_file, script_path, export_path, sxtools_path, export_format, subdivision,
         palette, static_vertex_colors, debug, threads):
 
         batch_args = [blender_path, "--background", "--factory-startup", "--threads", threads, "-noaudio", source_file, "--python", script_path]
@@ -811,6 +819,8 @@ class SXBATCHER_batch_local(object):
         batch_args.extend(["--"])
         batch_args.extend(["-x", export_path])
         batch_args.extend(["-l", sxtools_path])
+        if export_format is not None:
+            batch_args.extend(["-f", export_format])
         if subdivision is not None:
             batch_args.extend(["-sd", subdivision])
         if palette is not None:
@@ -1335,6 +1345,8 @@ class SXBATCHER_gui(tk.Tk):
                     'Critical': logging.CRITICAL
                 }
                 logging.getLogger().setLevel(debug_levels[debug_level])
+            elif var == 'export_format_var':
+                sxglobals.export_format = self.format_var.get()
 
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
@@ -1605,15 +1617,27 @@ class SXBATCHER_gui(tk.Tk):
         c4_tip = Hovertip(c4,'Verbose Blender debug output.', hover_delay=1000)
         c5_tip = Hovertip(c5,'Only process files with changed revisions from previous export.\nHuge time saver!', hover_delay=1000)
 
+        l_title_format = tk.Label(tab2, text='Export File Format')
+        l_title_format.grid(row=9, column=1, padx=10, pady=10)
+
+        self.format_var = tk.StringVar(self, name='export_format_var')
+
+        self.format_dropdown = ttk.Combobox(tab2, textvariable=self.format_var)
+        self.format_dropdown['values'] = ['fbx', 'gltf']
+        self.format_dropdown['state'] = 'readonly'
+        self.format_dropdown.grid(row=9, column=2, sticky='w')
+
+        self.format_var.trace_add('write', update_item)
+
         l_title3 = tk.Label(tab2, text='SX Batcher Debug Level')
-        l_title3.grid(row=9, column=1, padx=10, pady=10)
+        l_title3.grid(row=10, column=1, padx=10, pady=10)
 
         self.debug_var = tk.StringVar(self, name='debug_level_var')
 
         self.debug_dropdown = ttk.Combobox(tab2, textvariable=self.debug_var)
         self.debug_dropdown['values'] = ['Debug', 'Info', 'Warning', 'Error', 'Critical']
         self.debug_dropdown['state'] = 'readonly'
-        self.debug_dropdown.grid(row=9, column=2, sticky='w')
+        self.debug_dropdown.grid(row=10, column=2, sticky='w')
 
         self.debug_var.trace_add('write', update_item)
 
@@ -1621,17 +1645,17 @@ class SXBATCHER_gui(tk.Tk):
 
         # Work Batch Required Settings
         l_title4 = tk.Label(tab2, text='Work Script Settings')
-        l_title4.grid(row=10, column=1, padx=10, pady=10)
+        l_title4.grid(row=11, column=1, padx=10, pady=10)
 
         l2 = tk.Label(tab2, text='SX Tools Library Path:', width=20, justify='left', anchor='w')
-        l2.grid(row=11, column=1, sticky='w', padx=10)
+        l2.grid(row=12, column=1, sticky='w', padx=10)
         e7_str = tk.StringVar(self, name='sxtools_path_var')
         e7_str.set(sxglobals.sxtools_path)
         e7_str.trace_add('write', update_path)
         e7 = tk.Entry(tab2, textvariable=e7_str, width=60)
-        e7.grid(row=11, column=2)
+        e7.grid(row=12, column=2)
         button_browse_sxtoolspath = tk.Button(tab2, text='Browse', command=browse_button_sxp)
-        button_browse_sxtoolspath.grid(row=11, column=3)
+        button_browse_sxtoolspath.grid(row=12, column=3)
 
         e7_tip = Hovertip(e7,'SX TOOLS ONLY:\nChoose the folder containing SX Tools library files.\nTypically SX Tools folder.', hover_delay=1000)
 
@@ -1658,15 +1682,15 @@ class SXBATCHER_gui(tk.Tk):
         e6_int.trace_add('write', update_item)
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
-        c1.grid(row=12, column=1, sticky='w', padx=10)
+        c1.grid(row=13, column=1, sticky='w', padx=10)
         c2 = tk.Checkbutton(tab2, text='Subdivision:', variable=c2_bool, justify='left', anchor='w')
-        c2.grid(row=13, column=1, sticky='w', padx=10)
+        c2.grid(row=14, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
-        c3.grid(row=14, column=1, sticky='w', padx=10)
+        c3.grid(row=15, column=1, sticky='w', padx=10)
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
-        e5.grid(row=12, column=2, sticky='w')
+        e5.grid(row=13, column=2, sticky='w')
         e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
-        e6.grid(row=13, column=2, sticky='w')
+        e6.grid(row=14, column=2, sticky='w')
 
         e5_tip = Hovertip(e5,'SX TOOLS ONLY:\nIf checkbox enabled, the name of the palette to apply to all processed files.', hover_delay=1000)
         e6_tip = Hovertip(e6,'SX TOOLS ONLY:\nOverride the subdivision level of the processed files.', hover_delay=1000)
@@ -1811,6 +1835,7 @@ if __name__ == '__main__':
             global gui
             gui = SXBATCHER_gui()
             gui.debug_var.set(args.loglevel.capitalize())
+            gui.format_var.set(sxglobals.export_format)
             gui.mainloop()
 
     logging.info('Exited gracefully')

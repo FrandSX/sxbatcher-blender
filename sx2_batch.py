@@ -37,10 +37,10 @@ bpy.context.preferences.addons['sxtools2'].preferences.flipsmartx = False
 bpy.context.preferences.addons['sxtools2'].preferences.exportspace = 'LIN'
 bpy.context.preferences.addons['sxtools2'].preferences.exportroughness = 'SMOOTH'
 bpy.data.scenes["Scene"].sx2.exportfolder = export_path
-if args.format is not None:
+if args.format in ['fbx', 'gltf']:
     bpy.context.preferences.addons['sxtools2'].preferences.exportformat = args.format.upper()
 
-# If objects have legacy sxtools properties, convert first
+# If objects have legacy sxtools properties, convert to sx2 first
 # bpy.ops.object.select_all(action='SELECT')
 # bpy.ops.sx2.sxtosx2('EXEC_DEFAULT')
 
@@ -67,10 +67,6 @@ if args.staticvertexcolors is not None:
 for obj in bpy.context.view_layer.objects.selected:
     if 'sx2' in obj.keys():
         obj['sxToolsVersion'] = 'SX Tools 2 for Blender ' + str(sys.modules['sxtools2'].bl_info.get('version'))
-
-# for obj in bpy.context.view_layer.objects.selected:
-#     if 'sxtools' in obj.keys():
-#         obj.sxtools.decimation = 0
 
 bpy.ops.sx2.macro('EXEC_DEFAULT')
 

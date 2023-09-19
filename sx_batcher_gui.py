@@ -55,7 +55,7 @@ class SXBATCHER_globals(object):
         self.revision_dict = {}
 
         # Blender setting overrides
-        self.export_format = conf.get('format', 'FBX')
+        self.export_format = conf.get('format', 'default')
         self.debug = bool(int(conf.get('debug', False)))
         self.palette = bool(int(conf.get('palette', False)))
         self.palette_name = conf.get('palette_name', '')
@@ -208,7 +208,7 @@ class SXBATCHER_init(object):
 
         # Update batch processing options
         if args.format:
-            sxglobals.export_format = args.format if args.format in ['fbx', 'gltf'] else 'fbx'
+            sxglobals.export_format = args.format if args.format in ['default', 'fbx', 'gltf'] else 'default'
         if args.revisionexport:
             sxglobals.revision_export = True
         else:
@@ -878,7 +878,7 @@ class SXBATCHER_batch_local(object):
             for_transfer = []
             for current_folder, subdirs, files in os.walk('batch_results'):
                 for file in files:
-                    if file.endswith('.fbx'):
+                    if (file.endswith('.fbx')) or (file.endswith('.glb')):
                         file_path = pathlib.Path(os.path.join(current_folder, file))
                         payload.append({'magic': 'ankdf89d', file: os.path.relpath(current_folder, 'batch_results')})
                         for_transfer.append(file_path)
@@ -1582,7 +1582,7 @@ class SXBATCHER_gui(tk.Tk):
         e1_tip = Hovertip(e1,'The location of the Blender executable file.', hover_delay=1000)
         e2_tip = Hovertip(e2,'The location of headless batch script file.\nTypically yourscript.py in SX Batcher folder.', hover_delay=1000)
         e3_tip = Hovertip(e3,'The location of the asset catalogue file.\nThis MUST be in the root folder of your asset library.', hover_delay=1000)
-        e4_tip = Hovertip(e4,'Select the export root folder. \nFBX-files will be saved to \ncategory-specific subfolders.', hover_delay=1000)
+        e4_tip = Hovertip(e4,'Select the export root folder. \nFiles will be saved to \ncategory-specific subfolders.', hover_delay=1000)
 
         l_empty = tk.Label(tab2, text=' ', width=10)
         l_empty.grid(row=1, column=3)
@@ -1623,7 +1623,7 @@ class SXBATCHER_gui(tk.Tk):
         self.format_var = tk.StringVar(self, name='export_format_var')
 
         self.format_dropdown = ttk.Combobox(tab2, textvariable=self.format_var)
-        self.format_dropdown['values'] = ['fbx', 'gltf']
+        self.format_dropdown['values'] = ['default', 'fbx', 'gltf']
         self.format_dropdown['state'] = 'readonly'
         self.format_dropdown.grid(row=9, column=2, sticky='w')
 

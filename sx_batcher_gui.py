@@ -1104,7 +1104,8 @@ class SXBATCHER_gui(tk.Tk):
 
 
     def list_objs(self, obj_list, listbox):
-        for obj_name in obj_list:
+        sorted_obj_list = sorted(obj_list)
+        for obj_name in sorted_obj_list:
             listbox.insert('end', obj_name)
         return listbox
 

@@ -68,8 +68,6 @@ for obj in bpy.context.view_layer.objects.selected:
     if 'sx2' in obj.keys():
         obj['sxToolsVersion'] = 'SX Tools 2 for Blender ' + str(sys.modules['sxtools2'].bl_info.get('version'))
 
-bpy.ops.sx2.macro('EXEC_DEFAULT')
-
 # Disable mesh poly count optimizations
 for obj in bpy.context.view_layer.objects.selected:
     if 'sxWeld' in obj.modifiers.keys():
@@ -81,6 +79,7 @@ for obj in bpy.context.view_layer.objects.selected:
     if 'sxDecimate2' in obj.modifiers.keys():
             obj.modifiers['sxDecimate2'].show_viewport = False
 
+bpy.ops.sx2.macro('EXEC_DEFAULT')
 bpy.ops.sx2.exportfiles('EXEC_DEFAULT')
 
 bpy.ops.wm.quit_blender('EXEC_DEFAULT')

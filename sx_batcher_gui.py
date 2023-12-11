@@ -62,6 +62,8 @@ class SXBATCHER_globals(object):
         self.subdivision = bool(int(conf.get('subdivision', False)))
         self.subdivision_count = int(conf.get('subdivision_count', 0))
         self.static_vertex_colors = bool(int(conf.get('static_vertex_colors', False)))
+        self.collider_offset = bool(int(conf.get('collider_offset', False)))
+        self.collider_offset_value = float(conf.get('collider_offset_value', 0.0))
         self.revision_export = bool(int(conf.get('revision_export', False)))
 
         # Network settings
@@ -294,6 +296,8 @@ class SXBATCHER_init(object):
             'subdivision': str(int(sxglobals.subdivision)),
             'subdivision_count': str(sxglobals.subdivision_count),
             'static_vertex_colors': str(int(sxglobals.static_vertex_colors)),
+            'collider_offset': str(int(sxglobals.collider_offset)),
+            'collider_offset_value': str(sxglobals.collider_offset_value),
             'revision_export': str(int(sxglobals.revision_export)),
             'share_cpus': str(int(sxglobals.share_cpus)),
             'shared_cores': str(int(sxglobals.shared_cores)),
@@ -536,6 +540,7 @@ class SXBATCHER_batch_manager(object):
             'subdivision': '3',
             'palette': None,
             'static_vertex_colors': False,
+            'collider_offset': False,
             'debug': False,
             'threads': '0' if sxglobals.shared_cores == multiprocessing.cpu_count() else '1'
         }
@@ -647,6 +652,7 @@ class SXBATCHER_batch_manager(object):
             'subdivision': str(sxglobals.subdivision_count) if sxglobals.subdivision else None,
             'palette': sxglobals.palette_name if sxglobals.palette else None,
             'static_vertex_colors': sxglobals.static_vertex_colors,
+            'collider_offset': str(sxglobals.collider_offset_value) if sxglobals.collider_offset else None,
             'debug': sxglobals.debug,
             'threads': '0'
         } for file in source_files]
@@ -666,6 +672,7 @@ class SXBATCHER_batch_manager(object):
             'subdivision': str(remote_task['subdivision_count']) if remote_task['subdivision'] == 'True' else None,
             'palette': remote_task['palette_name'] if remote_task['palette'] == 'True' else None,
             'static_vertex_colors': True if remote_task['static_vertex_colors'] == 'True' else False,
+            'collider_offset': str(remote_task['collider_offset_value']) if remote_task['collider_offset'] == 'True' else None,
             'debug': True if remote_task['debug'] == 'True' else False,
             'threads': '0' if sxglobals.shared_cores == multiprocessing.cpu_count() else '1'
         } for remote_task in sxglobals.remote_assignment]
@@ -688,6 +695,8 @@ class SXBATCHER_batch_manager(object):
                     "palette": str(sxglobals.palette),
                     "palette_name": sxglobals.palette_name,
                     "static_vertex_colors": str(sxglobals.static_vertex_colors),
+                    "collider_offset": str(sxglobals.collider_offset),
+                    "collider_offset_value": str(sxglobals.collider_offset_value),
                     "debug": str(sxglobals.debug),
                     "batch_size": str(len(source_assets)),
                     "cost": asset[1]
@@ -810,7 +819,7 @@ class SXBATCHER_batch_local(object):
     
     def worker_process(self, *,
         blender_path, source_file, script_path, export_path, sxtools_path, export_format, subdivision,
-        palette, static_vertex_colors, debug, threads):
+        palette, static_vertex_colors, collider_offset, debug, threads):
 
         batch_args = [blender_path, "--background", "--factory-startup", "--threads", threads, "-noaudio", source_file, "--python", script_path]
 
@@ -827,6 +836,8 @@ class SXBATCHER_batch_local(object):
             batch_args.extend(["-sp", palette])
         if static_vertex_colors:
             batch_args.extend(["-st"])
+        if collider_offset:
+            batch_args.extend(["-co", collider_offset])
 
         try:
             p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)
@@ -1299,6 +1310,9 @@ class SXBATCHER_gui(tk.Tk):
                     sxglobals.subdivision_count = 0
                 else:
                     sxglobals.subdivision_count = subdivisions
+            elif var == 'collider_bool' or var == 'collider_float':
+                sxglobals.collider_offset = c9_bool.get()
+                sxglobals.collider_offset_value = e9_float.get()
             elif var == 'flatten_bool':
                 sxglobals.static_vertex_colors = c3_bool.get()
             elif var == 'debug_bool':
@@ -1664,23 +1678,29 @@ class SXBATCHER_gui(tk.Tk):
         c1_bool = tk.BooleanVar(self, name='palette_bool')
         c2_bool = tk.BooleanVar(self, name='subdivision_bool')
         c3_bool = tk.BooleanVar(self, name='flatten_bool')
+        c9_bool = tk.BooleanVar(self, name='collider_bool')
 
         e5_str = tk.StringVar(self, name='palettename_str')
         e6_int = tk.IntVar(self, value=0, name='subdivision_int')
+        e9_float = tk.DoubleVar(self, value=0.0, name='collider_float')
 
         c1_bool.set(sxglobals.palette)
         c2_bool.set(sxglobals.subdivision)
         c3_bool.set(sxglobals.static_vertex_colors)
+        c9_bool.set(sxglobals.collider_offset)
 
         e5_str.set(sxglobals.palette_name)
         e6_int.set(sxglobals.subdivision_count)
+        e9_float.set(sxglobals.collider_offset_value)
 
         c1_bool.trace_add('write', update_item)
         c2_bool.trace_add('write', update_item)
         c3_bool.trace_add('write', update_item)
+        c9_bool.trace_add('write', update_item)
 
         e5_str.trace_add('write', update_item)
         e6_int.trace_add('write', update_item)
+        e9_float.trace_add('write', update_item)
 
         c1 = tk.Checkbutton(tab2, text='Palette:', variable=c1_bool, justify='left', anchor='w')
         c1.grid(row=13, column=1, sticky='w', padx=10)
@@ -1688,13 +1708,18 @@ class SXBATCHER_gui(tk.Tk):
         c2.grid(row=14, column=1, sticky='w', padx=10)
         c3 = tk.Checkbutton(tab2, text='Flatten Vertex Colors', variable=c3_bool, justify='left', anchor='w')
         c3.grid(row=15, column=1, sticky='w', padx=10)
+        c9 = tk.Checkbutton(tab2, text='Collider Offset', variable=c9_bool, justify='left', anchor='w')
+        c9.grid(row=16, column=1, sticky='w', padx=10)
         e5 = tk.Entry(tab2, textvariable=e5_str, width=20, justify='left')
         e5.grid(row=13, column=2, sticky='w')
         e6 = tk.Entry(tab2, textvariable=e6_int, width=3, justify='left')
         e6.grid(row=14, column=2, sticky='w')
+        e9 = tk.Entry(tab2, textvariable=e9_float, width=3, justify='left')
+        e9.grid(row=16, column=2, sticky='w')
 
         e5_tip = Hovertip(e5,'SX TOOLS ONLY:\nIf checkbox enabled, the name of the palette to apply to all processed files.', hover_delay=1000)
         e6_tip = Hovertip(e6,'SX TOOLS ONLY:\nOverride the subdivision level of the processed files.', hover_delay=1000)
+        e9_tip = Hovertip(e9,'SX TOOLS ONLY:\nOverride the collider offset of the processed files.', hover_delay=1000)
 
         # Event handling
         button_save_settings.bind('<Button-1>', self.handle_click_save_settings)

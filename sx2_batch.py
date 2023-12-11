@@ -18,6 +18,7 @@ def get_args():
     parser.add_argument('-sd', '--subdivision', help='Subdivision Level Override')
     parser.add_argument('-sp', '--palette', help='Palette Override')
     parser.add_argument('-st', '--staticvertexcolors', action='store_true', help='Flatten layers to VertexColor0')
+    parser.add_argument('-co', '--collideroffset', help='Convex Hull Shrink Offset')
     parsed_script_args, _ = parser.parse_known_args(script_args)
     return parsed_script_args
 
@@ -63,6 +64,11 @@ if args.staticvertexcolors is not None:
     for obj in bpy.context.view_layer.objects.selected:
         if 'sx2' in obj.keys():
             obj.sx2.staticvertexcolors = str(int(bool(args.staticvertexcolors)))
+
+if args.collideroffset is not None:
+    for obj in bpy.context.view_layer.objects.selected:
+        if 'sx2' in obj.keys():
+            obj.sx2.collideroffsetfactor = float(args.collideroffset)
 
 for obj in bpy.context.view_layer.objects.selected:
     if 'sx2' in obj.keys():

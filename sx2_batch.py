@@ -45,6 +45,7 @@ if args.format in ['fbx', 'gltf']:
 # bpy.ops.object.select_all(action='SELECT')
 # bpy.ops.sx2.sxtosx2('EXEC_DEFAULT')
 
+bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 bpy.ops.object.select_all(action='SELECT')
 
 if args.subdivision is not None:

@@ -323,7 +323,7 @@ class SXBATCHER_init(object):
         if os.path.isfile(revision_path):
             return self.load_json(revision_path)
         else:
-            logging.error(f'Node {sxglobals.ip_addr} Error: file_revisions.json not found. A new one is created.')
+            logging.info(f'Node {sxglobals.ip_addr} Error: file_revisions.json not found. A new one is created.')
             revision_dict = manager.get_revisions(all=True)
             self.save_json(revision_path, revision_dict)
             return revision_dict

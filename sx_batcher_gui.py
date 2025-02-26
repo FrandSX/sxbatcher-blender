@@ -1151,16 +1151,26 @@ class SXBATCHER_gui(tk.Tk):
 
     def handle_click_listboxselect(self, event):
         tags = []
+        sources = []
         selected_item_list = [self.lb_items.get(i) for i in self.lb_items.curselection()]
         for obj in selected_item_list:
-            for obj_dict in sxglobals.catalogue[sxglobals.active_category].values():
+            for obj_name, obj_dict in sxglobals.catalogue[sxglobals.active_category].items():
                 if obj in obj_dict['objects']:
+                    sources.append(obj_name)
                     for tag in obj_dict['tags']:
                         tags.append(tag)
+
 
         # sort tags by frequency, remove duplicates
         tags = sorted(tags, key=tags.count, reverse=True)
         tags = list(dict.fromkeys(tags))
+
+        source_prefix = ''
+        if len(sources) > 0:
+            source_prefix = '\n\nSource Files of Selected:\n'
+        source_string = ''
+        for source in sources:
+            source_string += source + '\n'
 
         tag_string = ''
         for i, tag in enumerate(tags):
@@ -1170,10 +1180,12 @@ class SXBATCHER_gui(tk.Tk):
                 tag_string += '\n'
         tag_string += '\n'
 
-        prefix = ''
+        tag_prefix = ''
         if len(tag_string) > 0:
-            prefix = 'Tags in Selected:\n'
-        self.label_found_tags.configure(text=prefix+tag_string)
+            tag_prefix = '\n\nTags in Selected:\n'
+
+
+        self.label_found_tags.configure(text=source_prefix+source_string+tag_prefix+tag_string)
 
 
     def handle_click_start_batch(self, event):

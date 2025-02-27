@@ -1170,7 +1170,8 @@ class SXBATCHER_gui(tk.Tk):
             source_prefix = '\n\nSource Files of Selected:\n'
         source_string = ''
         for source in sources:
-            source_string += source + '\n'
+            if source not in source_string:
+                source_string += source + '\n'
 
         tag_string = ''
         for i, tag in enumerate(tags):

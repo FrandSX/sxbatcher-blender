@@ -57,6 +57,7 @@ class SXBATCHER_globals(object):
         # Blender setting overrides
         self.export_format = conf.get('format', 'default')
         self.debug = bool(int(conf.get('debug', False)))
+        self.loglevel = conf.get('loglevel', 'info')
         self.palette = bool(int(conf.get('palette', False)))
         self.palette_name = conf.get('palette_name', '')
         self.subdivision = bool(int(conf.get('subdivision', False)))
@@ -207,6 +208,8 @@ class SXBATCHER_init(object):
             sxglobals.staticvertexcolors = args.staticvertexcolors
         if args.verbose:
             sxglobals.debug = True
+        if args.loglevel:
+            sxglobals.loglevel = args.loglevel
 
         # Update batch processing options
         if args.format:
@@ -290,6 +293,7 @@ class SXBATCHER_init(object):
             'script_path': sxglobals.script_path.replace(os.path.sep, '//') if sxglobals.script_path != '' else '',
             'sxtools_path': sxglobals.sxtools_path.replace(os.path.sep, '//') if sxglobals.sxtools_path != '' else '',
             'debug': str(int(sxglobals.debug)),
+            'loglevel': sxglobals.loglevel,
             'format': sxglobals.export_format,
             'palette': str(int(sxglobals.palette)),
             'palette_name': sxglobals.palette_name,
@@ -1419,6 +1423,7 @@ class SXBATCHER_gui(tk.Tk):
                     sxglobals.nodes = []
             elif var == 'debug_level_var':
                 debug_level = self.debug_var.get()
+                sxglobals.loglevel = self.debug_var.get().lower()
                 debug_levels = {
                     'Debug': logging.DEBUG,
                     'Info': logging.INFO,
@@ -1925,7 +1930,7 @@ if __name__ == '__main__':
         else:
             global gui
             gui = SXBATCHER_gui()
-            gui.debug_var.set(args.loglevel.capitalize())
+            gui.debug_var.set(sxglobals.loglevel.capitalize())
             gui.format_var.set(sxglobals.export_format)
             gui.mainloop()
 

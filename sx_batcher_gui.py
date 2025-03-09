@@ -567,13 +567,10 @@ class SXBATCHER_batch_manager(object):
 
 
     def benchmark(self):
-        # 'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx2_batch.py'),
-        # conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        # target_dir = os.path.join(script_dir, 'batch_submissions')
         benchmark_task = {
             'blender_path': sxglobals.blender_path,
-            'source_file': 'perf_test.blend',
+            'source_file': str(os.path.join(script_dir, 'perf_test.blend')),
             'script_path': str(os.path.join(script_dir, 'sx2_batch.py')),
             'export_path': str(os.path.join(script_dir, 'batch_results')),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
@@ -880,6 +877,8 @@ class SXBATCHER_batch_local(object):
             batch_args.extend(["-st"])
         if collider_offset:
             batch_args.extend(["-co", collider_offset])
+
+        logging.debug(batch_args)
 
         try:
             p = subprocess.run(batch_args, check=True, text=True, encoding='utf-8', capture_output=True)

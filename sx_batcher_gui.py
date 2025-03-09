@@ -593,7 +593,8 @@ class SXBATCHER_batch_manager(object):
             t.start()
             t.join()
             now = time.perf_counter()
-            logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f} seconds')
+            # Performance result has magic 0.3 seconds subtracted to balance the opening duration of Blender
+            logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then-0.3: .2f} seconds') 
             sxglobals.performance_index = round(now-then, 2)
             init.reset_batch_folders()
             conf_dict = init.load_conf()

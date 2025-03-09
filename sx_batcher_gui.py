@@ -336,11 +336,12 @@ class SXBATCHER_init(object):
             if os.path.exists(folder):
                 shutil.rmtree(folder)
             os.makedirs(folder, exist_ok=True)
+            logging.debug(f'Folder: {folder}')
         logging.debug('Batch folders reset')
 
 
     # files are path objects, address is a tuple of IP address and port
-    def transfer_files(self, address, out_files):
+    def transfer_files_old(self, address, out_files):
         payload = out_files[0]
         files = out_files[1]
         sizemap = [(file.name, file.stat().st_size) for file in files]
@@ -380,6 +381,41 @@ class SXBATCHER_init(object):
                     logging.error(f'Node {sxglobals.ip_addr} retrying file transfer')
 
             completed = True
+        return completed
+
+
+    def transfer_files(self, address, out_files):
+        payload = out_files[0]
+        files = out_files[1]
+        sizemap = [(file.name, file.stat().st_size) for file in files]
+        payload.insert(0, sizemap)
+        bufsize = sxglobals.buffer_size
+        timeout = 30
+
+        then = time.time()
+        completed = False
+        while (time.time() - then < timeout) and not completed:
+            try:
+                # Send task data
+                with socket.create_connection(address, timeout=5) as sock:
+                    sock.sendall(json.dumps(payload).encode('utf-8'))
+                    sock.shutdown(socket.SHUT_RDWR)
+                    sock.close()
+                time.sleep(0.1)
+
+                # Send files
+                with socket.create_connection(address, timeout=20) as sock:
+                    for file in files:
+                        with open(file, 'rb') as f:
+                            logging.debug(f'Transferring {file}')
+                            while chunk := f.read(bufsize):
+                                sock.send(chunk)
+                    sock.shutdown(socket.SHUT_RDWR)
+                    sock.close()
+                completed = True
+            except (ConnectionResetError, TimeoutError, OSError) as error:
+                logging.error(f'Node {sxglobals.ip_addr} retrying transfer: {error}')
+                time.sleep(0.1)
         return completed
 
 
@@ -527,16 +563,21 @@ class SXBATCHER_batch_manager(object):
         sxglobals.remote_assignment = []
 
         if sxglobals.share_cpus:
-            init.reset_batch_folders()
+           init.reset_batch_folders()
 
 
     def benchmark(self):
+        # 'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx2_batch.py'),
+        # conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        # target_dir = os.path.join(script_dir, 'batch_submissions')
         benchmark_task = {
             'blender_path': sxglobals.blender_path,
             'source_file': 'perf_test.blend',
-            'script_path': str(os.path.realpath(__file__)).replace(os.path.basename(__file__), 'sx2_batch.py'),
-            'export_path': str(os.path.realpath('batch_results')),
+            'script_path': str(os.path.join(script_dir, 'sx2_batch.py')),
+            'export_path': str(os.path.join(script_dir, 'batch_results')),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
+            'export_format': 'FBX',
             'subdivision': '3',
             'palette': None,
             'static_vertex_colors': False,
@@ -556,7 +597,7 @@ class SXBATCHER_batch_manager(object):
             init.reset_batch_folders()
             conf_dict = init.load_conf()
             conf_dict['performance_index'] = str(sxglobals.performance_index)
-            conf_path = os.path.realpath(__file__).replace(os.path.basename(__file__), 'sx_conf.json')
+            conf_path = os.path.join(script_dir, 'sx_conf.json')
             init.save_json(conf_path, conf_dict)
         except OSError:
             sxglobals.performance_index = 0
@@ -658,15 +699,16 @@ class SXBATCHER_batch_manager(object):
         } for file in source_files]
 
 
-
     def prepare_received_tasks(self):
         # grab blender work script from the location of this script
-
+        # 'source_file': str(pathlib.Path('batch_submissions', remote_task['asset']).resolve()),
+        # 'export_path': str(pathlib.Path('batch_results').resolve()),
+        script_dir = os.path.dirname(os.path.realpath(__file__))
         return [{
             'blender_path': sxglobals.blender_path,
-            'source_file': str(pathlib.Path('batch_submissions', remote_task['asset']).resolve()),
+            'source_file': str(os.path.join(os.path.join(script_dir, 'batch_submissions'), remote_task['asset'])),
             'script_path': sxglobals.script_path,
-            'export_path': str(pathlib.Path('batch_results').resolve()),
+            'export_path': str(os.path.join(script_dir, 'batch_results')),
             'sxtools_path': os.path.abspath(sxglobals.sxtools_path),
             'export_format': sxglobals.export_format,
             'subdivision': str(remote_task['subdivision_count']) if remote_task['subdivision'] == 'True' else None,
@@ -884,14 +926,22 @@ class SXBATCHER_batch_local(object):
             logging.error(f'Node {sxglobals.ip_addr}: Errors in: {sxglobals.errors}')
 
         # transfer files to master node
+        logging.debug(f'Assignment: {sxglobals.remote_assignment}')
+        logging.debug(f'{sxglobals.share_cpus}, {len(sxglobals.remote_assignment)}')
         if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            target_dir = str(os.path.join(script_dir, 'batch_results'))
+            logging.debug(f'Submissions: {target_dir}')
             payload = []
             for_transfer = []
-            for current_folder, subdirs, files in os.walk('batch_results'):
+            for current_folder, subdirs, files in os.walk(target_dir):
+                logging.debug(f'Worker current folder: {current_folder}')
                 for file in files:
                     if (file.endswith('.fbx')) or (file.endswith('.glb')):
                         file_path = pathlib.Path(os.path.join(current_folder, file))
-                        payload.append({'magic': 'ankdf89d', file: os.path.relpath(current_folder, 'batch_results')})
+                        logging.debug(f'Payload file path: {file_path}')
+                        payload.append({'magic': 'ankdf89d', file: os.path.relpath(current_folder, target_dir)})
+                        logging.debug(f'Payload info: {os.path.relpath(current_folder, target_dir)}')
                         for_transfer.append(file_path)
 
             if len(payload) > 0:
@@ -1025,9 +1075,14 @@ class SXBATCHER_node_file_listener_thread(threading.Thread):
 
                     for i, (file, size) in enumerate(transfer_data):
                         if task_data[i]['magic'] == sxglobals.magic_task:
-                            target_dir = os.path.realpath('batch_submissions')
+                            # target_dir = os.path.realpath('batch_submissions')
+                            script_dir = os.path.dirname(os.path.realpath(__file__))
+                            target_dir = os.path.join(script_dir, 'batch_submissions')
+                            logging.debug(f'Target dir (network batch): {target_dir}')
                         else:
                             target_dir = os.path.join(sxglobals.export_path, task_data[i][file])
+                            logging.debug(f'Export dir: {sxglobals.export_path}')
+                            logging.debug(f'Received File Target Dir: {target_dir}')
                             os.makedirs(target_dir, exist_ok=True)
 
                         with open(os.path.join(target_dir, file), 'wb') as f:
@@ -1804,8 +1859,6 @@ if __name__ == '__main__':
     # Pre-loop tasks and file batches
     init.reset_batch_folders()
 
-
-    
     if len(sys.argv) == 1:
         sxglobals.headless = False
     else:
@@ -1877,4 +1930,6 @@ if __name__ == '__main__':
             gui.format_var.set(sxglobals.export_format)
             gui.mainloop()
 
+    # Housekeeping, clear batch folders
+    init.reset_batch_folders()
     logging.info('Exited gracefully')

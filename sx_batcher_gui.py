@@ -39,6 +39,7 @@ class SXBATCHER_globals(object):
         self.share_cpus = bool(int(conf.get('share_cpus', False)))
         self.shared_cores = int(conf.get('shared_cores', 0))
         self.use_network_nodes = bool(int(conf.get('use_nodes', False)))
+        self.job_assignment = 'Simple'
         self.ip_addr = init.get_ip()
         self.performance_index = float(conf.get('performance_index', 0))
 
@@ -706,14 +707,18 @@ class SXBATCHER_batch_manager(object):
                 node_tasks[node_ip] = []
 
             # if any node has failed the benchmark, fall back to method 2
-            method = 3
-            for node in nodes:
-                if not node[6] or float(node[6]) == 0:
-                    logging.debug(f'Fallback method 2')
-                    method = 2
+            method_ids = {'Simple': 1, 'Costs': 3}
+            method = method_ids[sxglobals.job_assignment]
+            logging.info(f'Using {sxglobals.job_assignment} task assignment')
+
+            if method == 3:
+                for node in nodes:
+                    if not node[6] or float(node[6]) == 0:
+                        logging.debug(f'Fallback method 2')
+                        method = 2
 
             if method == 1:
-                # Naive method: Divide tasks per node according to core counts
+                # Simple method: Divide tasks per node according to core counts
                 workload = len(tasks)
                 while workload > 0:
                     for node in nodes:
@@ -746,8 +751,8 @@ class SXBATCHER_batch_manager(object):
 
             elif method == 3:
                 # Cost-and-bias based method: Divide tasks per node
-                best_perf = min(float(node[6]) for node in nodes) ** 2
-                bias_cores = [round(float(node[3]) * best_perf / (float(node[6]) ** 2)) for node in nodes]
+                best_perf = min(float(node[6]) for node in nodes) ** 3
+                bias_cores = [round(float(node[3]) * best_perf / (float(node[6]) ** 3)) for node in nodes]
                 total_cores = sum(bias_cores)
                 total_cost = sum(asset[1] for asset in source_assets)
                 cost_shares = [total_cost * float(num_cores) / float(total_cores) for num_cores in bias_cores]
@@ -1359,6 +1364,8 @@ class SXBATCHER_gui(tk.Tk):
                 logging.getLogger().setLevel(debug_levels[debug_level])
             elif var == 'export_format_var':
                 sxglobals.export_format = self.format_var.get()
+            elif var == 'job_var':
+                sxglobals.job_assignment = self.job_var.get()
 
         def browse_button_bp():
             e1_str.set(filedialog.askopenfilename())
@@ -1730,14 +1737,17 @@ class SXBATCHER_gui(tk.Tk):
         core_count_bool = tk.BooleanVar(self, name='share_cpus_bool')
         use_nodes_bool = tk.BooleanVar(self, name='use_nodes_bool')
         core_count_int = tk.IntVar(self, value=sxglobals.shared_cores, name='share_cpus_int')
+        self.job_var = tk.StringVar(self, name='job_var')
 
         core_count_bool.set(sxglobals.share_cpus)
         core_count_int.set(sxglobals.shared_cores)
         use_nodes_bool.set(sxglobals.use_network_nodes)
+        self.job_var.set(sxglobals.job_assignment)
 
         core_count_bool.trace_add('write', update_item)
         use_nodes_bool.trace_add('write', update_item)
         core_count_int.trace_add('write', update_item)
+        self.job_var.trace_add('write', update_item)
 
         c5 = tk.Checkbutton(self.tab3, text='Share CPU Cores ('+str(multiprocessing.cpu_count())+'):', variable=core_count_bool, justify='left', anchor='w')
         c5.grid(row=2, column=2, sticky='w')
@@ -1747,18 +1757,27 @@ class SXBATCHER_gui(tk.Tk):
         e8 = tk.Entry(self.tab3, textvariable=core_count_int, width=3, justify='left')
         e8.grid(row=2, column=3, sticky='w')
 
+        l_title4 = tk.Label(self.tab3, text='Job Assignment', justify='left', anchor='w')
+        l_title4.grid(row=4, column=2)
+
+        self.job_dropdown = ttk.Combobox(self.tab3, textvariable=self.job_var)
+        self.job_dropdown['values'] = ['Simple', 'Costs']
+        self.job_dropdown['state'] = 'readonly'
+        self.job_dropdown.grid(row=4, column=3, sticky='w')
+
         c5_tip = Hovertip(c5,'Share CPU resources with other computers on your local network.\nBlender processes are launched as single-threaded if shared cores is below max.', hover_delay=1000)
         e8_tip = Hovertip(e8,'Share CPU resources with other computers on your local network.\nBlender processes are launched as single-threaded if shared cores is below max.', hover_delay=1000)
         c6_tip = Hovertip(c6,'Use network nodes to process file batches. \nEnable Share CPU Cores to ALSO use your local computer.', hover_delay=1000)
+        job_tip = Hovertip(self.job_dropdown,'Simple sends files according to CPU core counts.\nCost-based uses CPU performance and catalogue object costs.\nSimple works better for simple objects.', hover_delay=1000)
 
         l_title5 = tk.Label(self.tab3, text='Node Discovery')
-        l_title5.grid(row=4, column=2, padx=10, pady=10)
+        l_title5.grid(row=5, column=2, padx=10, pady=10)
 
         self.remote_task_bool = tk.BooleanVar(self)
         self.remote_task_bool.set(False)
         self.remote_task_bool.trace_add('write', update_remote_process)
 
-        self.table_grid(self.tab3, [['IP Address', 'Host Name', 'System', 'Cores', 'Status'], ], 5, 2)
+        self.table_grid(self.tab3, [['IP Address', 'Host Name', 'System', 'Cores', 'Status'], ], 6, 2)
 
         late_loop()
 

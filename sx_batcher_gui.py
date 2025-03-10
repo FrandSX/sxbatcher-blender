@@ -345,49 +345,6 @@ class SXBATCHER_init(object):
 
 
     # files are path objects, address is a tuple of IP address and port
-    def transfer_files_old(self, address, out_files):
-        payload = out_files[0]
-        files = out_files[1]
-        sizemap = [(file.name, file.stat().st_size) for file in files]
-        payload.insert(0, sizemap)
-        bufsize = sxglobals.buffer_size
-        timeout = 30
-
-        then = time.time()
-        completed = False
-        while (time.time() - then < timeout) and not completed:
-            x = False
-            while (time.time() - then < timeout) and not x:
-                try:
-                    with socket.create_connection(address, timeout=5) as sock:
-                        sock.sendall(json.dumps(payload).encode('utf-8'))
-                        sock.shutdown(socket.SHUT_RDWR)
-                        sock.close()
-                    x = True
-                except (ConnectionResetError, TimeoutError):
-                    time.sleep(0.1)
-                    logging.error(f'Node {sxglobals.ip_addr} retrying task data transfer')
-            time.sleep(0.1)
-            y = False
-            while (time.time() - then < timeout) and not y:
-                try:
-                    with socket.create_connection(address, timeout=20) as sock:
-                        for file in files:
-                            with open(file, 'rb') as f:
-                                logging.debug(f'Transferring {file}')
-                                while chunk := f.read(bufsize):
-                                    sock.send(chunk)
-                        sock.shutdown(socket.SHUT_RDWR)
-                        sock.close()
-                    y = True
-                except (ConnectionResetError, TimeoutError):
-                    time.sleep(0.1)
-                    logging.error(f'Node {sxglobals.ip_addr} retrying file transfer')
-
-            completed = True
-        return completed
-
-
     def transfer_files(self, address, out_files):
         payload = out_files[0]
         files = out_files[1]
@@ -432,9 +389,7 @@ class SXBATCHER_batch_manager(object):
 
 
     def get_catalogue_objs(self):
-        obj_list = []
-        for category in sxglobals.catalogue:
-            obj_list.extend(self.get_category_objs(category))
+        obj_list = [obj for category in sxglobals.catalogue for obj in self.get_category_objs(category)]
         return obj_list
 
 
@@ -461,10 +416,7 @@ class SXBATCHER_batch_manager(object):
 
 
     def remove_inactive_nodes(self):
-        nodes = []
-        for node in sxglobals.nodes:
-            if int(time.time()) - node[5] < 15:
-                nodes.append(node)
+        nodes = [node for node in sxglobals.nodes if int(time.time()) - node[5] < 15]
         sxglobals.nodes = nodes[:]
 
 
@@ -593,8 +545,7 @@ class SXBATCHER_batch_manager(object):
             t.start()
             t.join()
             now = time.perf_counter()
-            # Performance result has magic 0.3 seconds subtracted to balance the opening duration of Blender
-            logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then-0.3: .2f} seconds') 
+            logging.info(f'Node {sxglobals.ip_addr} benchmark result {now-then: .2f} seconds') 
             sxglobals.performance_index = round(now-then, 2)
             init.reset_batch_folders()
             conf_dict = init.load_conf()
@@ -677,10 +628,7 @@ class SXBATCHER_batch_manager(object):
         # get asset paths from catalogue, map to file system locations, remove doubles
         source_assets = self.get_source_assets(sxglobals.revision_export)
 
-        source_files = []
-        for asset in source_assets:
-            file_path = asset.replace('//', os.path.sep)
-            source_files.append(os.path.join(asset_path, file_path))
+        source_files = [os.path.join(asset_path, asset.replace('//', os.path.sep)) for asset in source_assets]
         if len(source_files) > 0:
             logging.debug(f'\nNode {sxglobals.ip_addr} source files: {source_files}')
 
@@ -703,8 +651,6 @@ class SXBATCHER_batch_manager(object):
 
     def prepare_received_tasks(self):
         # grab blender work script from the location of this script
-        # 'source_file': str(pathlib.Path('batch_submissions', remote_task['asset']).resolve()),
-        # 'export_path': str(pathlib.Path('batch_results').resolve()),
         script_dir = os.path.dirname(os.path.realpath(__file__))
         return [{
             'blender_path': sxglobals.blender_path,
@@ -780,13 +726,8 @@ class SXBATCHER_batch_manager(object):
 
             elif method == 2:
                 # Cost based method: Divide tasks per node
-                total_cores = 0
-                for node in nodes:
-                    total_cores += int(node[3])
-
-                total_cost = 0
-                for asset in source_assets:
-                    total_cost += asset[1]
+                total_cores = sum(int(node[3]) for node in nodes)
+                total_cost = sum(asset[1] for asset in source_assets)
                 logging.debug(f'Total cost: {total_cost}')
 
                 # Allocate work share
@@ -805,23 +746,11 @@ class SXBATCHER_batch_manager(object):
 
             elif method == 3:
                 # Cost-and-bias based method: Divide tasks per node
-                perfs = []
-                for node in nodes:
-                    perfs.append(float(node[6]))
-                best_perf = min(perfs)
-
-                bias_cores = []
-                for node in nodes:
-                    bias_cores.append(round(float(node[3]) * best_perf / float(node[6])))
-                    
+                best_perf = min(float(node[6]) for node in nodes) ** 2
+                bias_cores = [round(float(node[3]) * best_perf / (float(node[6]) ** 2)) for node in nodes]
                 total_cores = sum(bias_cores)
-                total_cost = 0
-                for asset in source_assets:
-                    total_cost += asset[1]
-
-                cost_shares = []
-                for num_cores in bias_cores:
-                    cost_shares.append(total_cost * float(num_cores) / float(total_cores))
+                total_cost = sum(asset[1] for asset in source_assets)
+                cost_shares = [total_cost * float(num_cores) / float(total_cores) for num_cores in bias_cores]
 
                 # Allocate work share
                 start = 0
@@ -837,13 +766,9 @@ class SXBATCHER_batch_manager(object):
                     logging.info(f'Node: {node[0]}\tWork Share: {share / total_cost: .1%} ({len(node_tasks[node[0]])} files)')
 
         # remove empty task lists
-        empty_nodes = []
-        for node, tasks in node_tasks.items():
-            if len(tasks) == 0:
-                empty_nodes.append(node)
-        if len(empty_nodes) > 0:
-            for node in empty_nodes:
-                del node_tasks[node]
+        empty_nodes = [node for node, tasks in node_tasks.items() if len(tasks) == 0]
+        for node in empty_nodes:
+            del node_tasks[node]
 
         return node_tasks
 
@@ -931,7 +856,6 @@ class SXBATCHER_batch_local(object):
 
         # transfer files to master node
         logging.debug(f'Assignment: {sxglobals.remote_assignment}')
-        logging.debug(f'{sxglobals.share_cpus}, {len(sxglobals.remote_assignment)}')
         if sxglobals.share_cpus and len(sxglobals.remote_assignment) > 0:
             script_dir = os.path.dirname(os.path.realpath(__file__))
             target_dir = str(os.path.join(script_dir, 'batch_results'))

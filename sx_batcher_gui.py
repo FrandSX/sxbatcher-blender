@@ -924,13 +924,15 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
 #    Runs on host, receives multicast broadcasts from available nodes
 # ------------------------------------------------------------------------
 class SXBATCHER_node_discovery_thread(threading.Thread):
-    def __init__(self, group, port, timeout=10):
+    def __init__(self, group, port, interface_ip, timeout=10):
         super().__init__()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         # self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.settimeout(timeout)
-        self.sock.bind(('', port))
-        packed = struct.pack('=4sl', socket.inet_aton(group), socket.INADDR_ANY)
+        self.sock.bind((interface_ip, port))
+        # self.sock.bind(('', port))
+        # packed = struct.pack('=4sl', socket.inet_aton(group), socket.INADDR_ANY)
+        packed = struct.pack('=4s4s', socket.inet_aton(group), socket.inet_aton(interface_ip))
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, packed)
 
 
@@ -1820,7 +1822,7 @@ if __name__ == '__main__':
         broadcast_thread.daemon = True
         broadcast_thread.start()
 
-        discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port)
+        discovery_thread = SXBATCHER_node_discovery_thread(sxglobals.group, sxglobals.discovery_port, sxglobals.ip_addr)
         discovery_thread.daemon = True
         discovery_thread.start()
 

@@ -889,7 +889,7 @@ class SXBATCHER_batch_local(object):
 #    Responsible for broadcasting availability of CPU resources
 # ------------------------------------------------------------------------
 class SXBATCHER_node_broadcast_thread(threading.Thread):
-    def __init__(self, payload, group, port, timeout=10):
+    def __init__(self, payload, group, port, interface_ip, timeout=10):
         super().__init__()
         # self.stop_event = threading.Event()
         self.group = group
@@ -897,6 +897,7 @@ class SXBATCHER_node_broadcast_thread(threading.Thread):
         self.timeout = timeout
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface_ip))
         self.sock.settimeout(timeout)
 
 
@@ -1818,7 +1819,7 @@ if __name__ == '__main__':
     if not sxglobals.validate_paths() and sxglobals.headless:
         logging.critical('Invalid path arguments detected')
     else:
-        broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port)
+        broadcast_thread = SXBATCHER_node_broadcast_thread(init.payload(), sxglobals.group, sxglobals.discovery_port, sxglobals.ip_addr)
         broadcast_thread.daemon = True
         broadcast_thread.start()
 

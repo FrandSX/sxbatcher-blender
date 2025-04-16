@@ -2,6 +2,8 @@ import argparse
 import bpy
 import os
 import sys
+import addon_utils
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -12,6 +14,7 @@ def get_args():
     script_args = all_arguments[double_dash_index + 1: ]
 
     # add parser rules
+    parser.add_argument('-sx', '--sxaddonpath', help='Path to SX Tools 2 addon')
     parser.add_argument('-x', '--exportpath', help='Export Path')
     parser.add_argument('-f', '--format', help='Export File Format')
     parser.add_argument('-l', '--librarypath', help='SX Tools Library Path')
@@ -26,18 +29,64 @@ args = get_args()
 export_path = os.path.abspath(args.exportpath) + os.path.sep
 library_path = os.path.abspath(args.librarypath) + os.path.sep
 
+
+# ------------------------------------------------------------------------
+#    Check if SX Tools 2 is already installed
+# ------------------------------------------------------------------------
+def check_installed():
+    for mod in addon_utils.modules():
+        if mod.bl_info.get('name') == 'SX Tools 2':
+            return True
+    return False
+
+
+def install_addon(addon_path):
+    if os.path.isfile(addon_path) and addon_path.endswith('.py'):
+        print(f'Installing SX Tools 2 from Python file: {addon_path}')
+        bpy.ops.preferences.addon_install(filepath=addon_path)
+        bpy.ops.preferences.addon_enable(module='sxtools2')    
+    # For a directory, look for sxtools2.py
+    elif os.path.isdir(addon_path):
+        main_file = os.path.join(addon_path, 'sxtools2.py')
+        if os.path.exists(main_file):
+            print(f'Installing SX Tools 2 from Python file: {main_file}')
+            bpy.ops.preferences.addon_install(filepath=main_file)
+            bpy.ops.preferences.addon_enable(module='sxtools2')
+        else:
+            print(f'Error: Could not find sxtools2.py in {addon_path}')
+            sys.exit(1)
+    else:
+        print(f'Error: Invalid addon path: {addon_path}')
+        sys.exit(1)
+
+
+if check_installed():
+    try:
+        bpy.ops.preferences.addon_enable(module='sxtools2')
+        print("SX Tools 2 installed and enabled.")
+    except Exception as e:
+        print(f"Error enabling SX Tools 2: {e}")
+else:
+    print("SX Tools 2 not found. Attempting to install.")
+    if args.sxaddonpath:
+        addon_path = os.path.abspath(args.sxaddonpath)
+        install_addon(addon_path)
+    else:
+        print('Error: SX Tools 2 is not installed and no addon path provided.')
+        print('Please provide the path to SX Tools 2 addon with -sx/--sxaddonpath parameter.')
+        sys.exit(1)
+
+
 # ------------------------------------------------------------------------
 #    The below steps are designed for use with SX Tools 2 Blender addon.
 #    Edit according to the needs of your project.
 # ------------------------------------------------------------------------
 
-# bpy.ops.wm.addon_install(filepath='/home/bob/sxtools-blender/sxtools.py')
-bpy.ops.preferences.addon_enable(module="sxtools2")
 bpy.context.preferences.addons['sxtools2'].preferences.libraryfolder = library_path
 bpy.context.preferences.addons['sxtools2'].preferences.flipsmartx = False
 bpy.context.preferences.addons['sxtools2'].preferences.exportspace = 'LIN'
 bpy.context.preferences.addons['sxtools2'].preferences.exportroughness = 'SMOOTH'
-bpy.data.scenes["Scene"].sx2.exportfolder = export_path
+bpy.data.scenes['Scene'].sx2.exportfolder = export_path
 if args.format in ['fbx', 'gltf']:
     bpy.context.preferences.addons['sxtools2'].preferences.exportformat = args.format.upper()
 
